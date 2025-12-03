@@ -1,0 +1,25 @@
+# Activar el motor de reescritura de URLs
+RewriteEngine On
+
+# Establecer el directorio base para las reglas
+RewriteBase /admin/
+
+# ----------------------------------------------------------------------
+# --- BLOQUE CRÍTICO PARA LA AUTENTICACIÓN ---
+# Captura la cabecera 'Authorization' y la pone a disposición de PHP
+# para que el AuthMiddleware pueda leerla.
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+# ----------------------------------------------------------------------
+
+# Si la petición no es para un archivo existente...
+RewriteCond %{REQUEST_FILENAME} !-f
+# Y no es para un directorio existente...
+RewriteCond %{REQUEST_FILENAME} !-d
+# ...entonces, redirige la petición a url.php
+RewriteRule ^ url.php [QSA,L]
+
+# -- Cabeceras de Seguridad Básicas --
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "DENY"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"

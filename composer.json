@@ -1,0 +1,31 @@
+{
+    "name": "robertopv24/fox-ia",
+    "description": "Fox-ia - Un entorno asistido por IA.",
+    "type": "project",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "robertopv24"
+        }
+    ],
+    "require": {
+        "vlucas/phpdotenv": "^5.6",
+        "firebase/php-jwt": "^6.10",
+        "phpmailer/phpmailer": "^6.10",
+        "mpdf/mpdf": "^8.2",
+        "spatie/db-dumper": "^3.7",
+        "delight-im/cookie": "^3.4",
+        "cboden/ratchet": "^0.4.4",
+        "monolog/monolog": "^3.9",
+        "predis/predis": "^3.2",
+        "clue/redis-react": "^2.8"
+    },
+    "autoload": {
+        "psr-4": {
+            "Foxia\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}

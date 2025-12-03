@@ -1,0 +1,457 @@
+// websocket.js - Manejo de WebSocket REFACTORIZADO con gestión de estado robusta
+import stateManager from './stateManager.js';
+import { getCookie } from './api.js';
+import { showNotification, updateNotificationBadge, addNotificationToList } from './ui.js';
+import { fetchChats, addMessageToChat } from './ui.js';
+import { WebSocketManager } from './webSocketManager.js';
+import ErrorHandler from './errorHandler.js';
+
+let webSocketManager = null;
+// CORRECCIÓN: Estado unificado de conexión
+let connectionState = 'disconnected'; // 'disconnected', 'connecting', 'connected', 'reconnecting'
+
+/**
+ * Inicializa y conecta el WebSocketManager de forma controlada
+ */
+export async function connectWebSocket() {
+    if (connectionState === 'connecting' || connectionState === 'reconnecting') {
+        console.log('⚠️ Conexión WebSocket ya en progreso, ignorando...');
+        return;
+    }
+
+    const state = stateManager.getState();
+    if (!state.isAuthenticated || !state.currentUser) {
+        console.warn('⚠️ No hay usuario autenticado para conectar WebSocket');
+        return;
+    }
+
+    connectionState = 'connecting';
+    console.log('🔗 Iniciando conexión WebSocket...');
+
+    try {
+        await establishWebSocketConnection();
+        connectionState = 'connected';
+        console.log('✅ Conexión WebSocket establecida correctamente');
+    } catch (error) {
+        connectionState = 'disconnected';
+        console.error('❌ Error conectando WebSocket:', error);
+        ErrorHandler.handle(error, 'websocket_connection');
+        throw error;
+    }
+}
+
+/**
+ * Establece la conexión WebSocket con timeout y manejo de errores
+ */
+async function establishWebSocketConnection() {
+    // Limpiar conexión anterior si existe
+    if (webSocketManager) {
+        webSocketManager.disconnect();
+        webSocketManager = null;
+    }
+
+    const state = stateManager.getState();
+    const websocketUrl = `wss://${state.hostname}:4431`;
+
+    console.log(`🔗 Conectando a: ${websocketUrl}`);
+
+    // Configurar opciones del WebSocketManager
+    const options = {
+        maxReconnectAttempts: 5,
+        reconnectDelay: 3000,
+        maxReconnectDelay: 30000,
+        heartbeatInterval: 30000,
+        timeout: 10000
+    };
+
+    webSocketManager = new WebSocketManager(websocketUrl, options);
+
+    // Configurar handlers de eventos
+    setupWebSocketHandlers();
+
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            reject(new Error('Timeout de conexión WebSocket (10s)'));
+        }, 10000);
+
+        const cleanup = () => {
+            clearTimeout(timeout);
+            webSocketManager.offOpen(openHandler);
+            webSocketManager.offError(errorHandler);
+        };
+
+        const openHandler = () => {
+            cleanup();
+            resolve();
+        };
+
+        const errorHandler = (error) => {
+            cleanup();
+            reject(error);
+        };
+
+        webSocketManager.onOpen(openHandler);
+        webSocketManager.onError(errorHandler);
+
+        // Iniciar conexión
+        if (!webSocketManager.connect()) {
+            cleanup();
+            reject(new Error('No se pudo iniciar la conexión WebSocket'));
+        }
+    });
+}
+
+/**
+ * Configura todos los handlers de eventos del WebSocket
+ */
+function setupWebSocketHandlers() {
+    if (!webSocketManager) return;
+
+    // Handler para conexión exitosa
+    webSocketManager.onOpen(handleWebSocketOpen);
+
+    // Handler para mensajes específicos
+    webSocketManager.onMessage('auth_success', handleAuthSuccess);
+    webSocketManager.onMessage('auth_error', handleAuthError);
+    webSocketManager.onMessage('new_message', handleNewMessage);
+    webSocketManager.onMessage('new_notification', handleNewNotification);
+    webSocketManager.onMessage('chat_notification', handleChatNotification);
+    webSocketManager.onMessage('pong', handlePong);
+    webSocketManager.onMessage('error', handleWebSocketError);
+
+    // Handler global para logging
+    webSocketManager.onMessage('*', (data) => {
+        if (!['pong'].includes(data.type)) {
+            console.log('📨 Mensaje WebSocket recibido:', data);
+        }
+    });
+
+    // Handler para cierre de conexión
+    webSocketManager.onClose(handleWebSocketClose);
+
+    // Handler para errores de conexión
+    webSocketManager.onError(handleWebSocketError);
+}
+
+/**
+ * Maneja la apertura exitosa de la conexión
+ */
+function handleWebSocketOpen(event) {
+    console.log('✅ Conexión WebSocket establecida', event);
+
+    connectionState = 'connected';
+    stateManager.setWebSocketState(true, webSocketManager.ws);
+
+    if (document.getElementById('connection-status')) {
+        document.getElementById('connection-status').textContent = 'Conectado (WebSocket)';
+        document.getElementById('connection-status').style.color = 'var(--success)';
+    }
+
+    // Autenticar inmediatamente después de conectar
+    authenticateWebSocket();
+
+    showNotification('Conexión en tiempo real activada', 'success');
+}
+
+/**
+ * Autentica el WebSocket con el servidor
+ */
+function authenticateWebSocket() {
+    const token = getCookie('auth_token');
+    const currentState = stateManager.getState();
+
+    if (token && currentState.currentUser) {
+        const chatUuids = Array.from(document.querySelectorAll('.chat-item'))
+                            .map(item => item.dataset.uuid)
+                            .filter(uuid => uuid);
+
+        const authMessage = {
+            type: 'auth',
+            token: token,
+            chats: chatUuids
+        };
+
+        if (webSocketManager.send(authMessage)) {
+            console.log('🔐 Enviando autenticación WebSocket con chats:', chatUuids);
+        } else {
+            console.error('❌ No se pudo enviar autenticación WebSocket');
+            ErrorHandler.handleNetworkError('websocket_auth_send');
+        }
+    } else {
+        console.warn('⚠️ No hay token de autenticación o usuario para WebSocket');
+    }
+}
+
+/**
+ * Maneja éxito de autenticación
+ */
+function handleAuthSuccess(data) {
+    console.log('✅ Autenticación WebSocket exitosa');
+
+    // Suscribirse al chat actual si existe
+    const state = stateManager.getState();
+    if (state.currentChat) {
+        subscribeToChat(state.currentChat.uuid);
+    }
+}
+
+/**
+ * Maneja error de autenticación
+ */
+function handleAuthError(data) {
+    console.error('❌ Error de autenticación WebSocket:', data.message);
+
+    ErrorHandler.handle(
+        new Error(data.message || 'Error de autenticación WebSocket'),
+        'websocket_auth',
+        { code: 'AUTH_ERROR' }
+    );
+}
+
+/**
+ * Maneja nuevo mensaje
+ */
+function handleNewMessage(data) {
+    console.log('💬 Nuevo mensaje recibido via WebSocket', data);
+
+    const messageChatUuid = data.chat_uuid;
+    const state = stateManager.getState();
+    const isForCurrentChat = state.currentChat && messageChatUuid === state.currentChat.uuid;
+
+    if (messageChatUuid) {
+        // Actualizar la lista de chats siempre
+        fetchChats();
+
+        // Si es para el chat actual, mostrar el mensaje
+        if (isForCurrentChat) {
+            addMessageToChat(data.message, data.is_reply, data.replying_to);
+
+            // Ocultar indicador de "pensando" si es un mensaje de IA
+            if (data.message.ai_model && document.getElementById('thinking-container')) {
+                document.getElementById('thinking-container').classList.add('hidden');
+            }
+
+            scrollToBottom();
+        }
+
+        // Siempre mostrar notificación si no es del usuario actual
+        if (state.currentUser && data.sender_info && data.sender_info.id != state.currentUser.id) {
+            const chatTitle = data.chat_title || 'Chat';
+            const senderName = data.sender_info.name || 'Usuario';
+            const messagePreview = data.message.content.substring(0, 50) + '...';
+
+            // Mostrar notificación diferente si es respuesta
+            if (data.is_reply) {
+                showNotification(`📨 ${senderName} respondió en ${chatTitle}: ${messagePreview}`, 'info');
+            } else {
+                showNotification(`💬 ${senderName} en ${chatTitle}: ${messagePreview}`, 'info');
+            }
+        }
+    }
+}
+
+/**
+ * Maneja nueva notificación
+ */
+function handleNewNotification(data) {
+    console.log('🔔 Nueva notificación recibida:', data);
+
+    if (data.notification) {
+        // Actualizar contador de notificaciones
+        updateNotificationBadge(1);
+
+        // Agregar notificación a la lista
+        addNotificationToList(data.notification);
+
+        // Mostrar notificación toast si no está en el panel de notificaciones
+        if (!isNotificationsPanelActive()) {
+            showNotification(data.notification.title, 'info');
+        }
+    }
+}
+
+/**
+ * Maneja notificación de chat
+ */
+function handleChatNotification(data) {
+    console.log('🔔 Notificación de chat recibida', data);
+
+    if (data.notification) {
+        const notification = data.notification;
+        const message = notification.is_reply ?
+            `📨 ${notification.sender_name} respondió en ${notification.chat_title}: ${notification.message_preview}` :
+            `💬 ${notification.sender_name} en ${notification.chat_title}: ${notification.message_preview}`;
+
+        showNotification(message, 'info');
+    }
+}
+
+/**
+ * Maneja respuesta de ping
+ */
+function handlePong(data) {
+    console.log('🏓 Pong recibido - Conexión activa');
+}
+
+/**
+ * Maneja errores del WebSocket
+ */
+function handleWebSocketError(error) {
+    console.error('❌ Error WebSocket:', error);
+
+    connectionState = 'disconnected';
+    stateManager.setWebSocketState(false);
+
+    if (document.getElementById('connection-status')) {
+        document.getElementById('connection-status').textContent = 'Desconectado';
+        document.getElementById('connection-status').style.color = 'var(--danger)';
+    }
+
+    ErrorHandler.handle(error, 'websocket_error');
+}
+
+/**
+ * Maneja cierre de conexión
+ */
+function handleWebSocketClose(event) {
+    console.log('🔌 WebSocket cerrado:', event.code, event.reason);
+
+    connectionState = 'disconnected';
+    stateManager.setWebSocketState(false);
+
+    if (document.getElementById('connection-status')) {
+        document.getElementById('connection-status').textContent = 'Desconectado';
+        document.getElementById('connection-status').style.color = 'var(--danger)';
+    }
+
+    // No reconectar para cierres limpios (código 1000)
+    if (event.code === 1000) {
+        console.log('🔌 Cierre limpio del WebSocket');
+        return;
+    }
+
+    // Reconectar automáticamente para otros cierres
+    console.log('🔄 Intentando reconexión automática...');
+    connectionState = 'reconnecting';
+
+    setTimeout(() => {
+        if (connectionState === 'reconnecting') {
+            connectWebSocket().catch(error => {
+                console.error('❌ Reconexión automática fallida:', error);
+            });
+        }
+    }, 3000);
+}
+
+/**
+ * Suscribe a un chat específico
+ */
+export function subscribeToChat(chatUuid) {
+    if (webSocketManager && webSocketManager.isConnected) {
+        const subscribeMessage = {
+            type: 'subscribe',
+            chat_uuid: chatUuid
+        };
+
+        if (webSocketManager.send(subscribeMessage)) {
+            console.log(`📋 Suscribiéndose al chat: ${chatUuid}`);
+        } else {
+            console.error(`❌ No se pudo suscribir al chat: ${chatUuid}`);
+            ErrorHandler.handleNetworkError('websocket_subscribe');
+        }
+    } else {
+        console.warn('⚠️ WebSocket no conectado, no se puede suscribir al chat');
+    }
+}
+
+/**
+ * Envía un mensaje a través del WebSocket
+ */
+export function sendWebSocketMessage(message) {
+    if (webSocketManager && webSocketManager.isConnected) {
+        return webSocketManager.send(message);
+    } else {
+        console.warn('⚠️ WebSocket no conectado, no se puede enviar mensaje');
+        return false;
+    }
+}
+
+/**
+ * Desconecta el WebSocket de forma limpia
+ */
+export function disconnectWebSocket() {
+    console.log('🔌 Desconectando WebSocket manualmente...');
+
+    connectionState = 'disconnected';
+
+    if (webSocketManager) {
+        webSocketManager.disconnect(1000, 'Desconexión manual');
+        webSocketManager = null;
+        console.log('🔌 WebSocket desconectado manualmente');
+    }
+
+    stateManager.setWebSocketState(false);
+}
+
+/**
+ * Obtiene el estado actual del WebSocket
+ */
+export function getWebSocketStatus() {
+    return {
+        connectionState,
+        managerStatus: webSocketManager ? webSocketManager.getStatus() : null,
+        globalState: stateManager.getState().isWebSocketConnected
+    };
+}
+
+/**
+ * CORRECCIÓN: Función para reconexión manual con protección
+ */
+export function reconnectWebSocket() {
+    if (connectionState === 'connecting' || connectionState === 'reconnecting') {
+        console.log('⚠️ Reconexión ya en progreso...');
+        return;
+    }
+
+    console.log('🔄 Reconexión manual solicitada');
+    connectWebSocket().catch(error => {
+        console.error('❌ Reconexión manual fallida:', error);
+    });
+}
+
+/**
+ * Función para diagnóstico
+ */
+export function diagnoseWebSocket() {
+    const status = getWebSocketStatus();
+    console.log('🔍 DIAGNÓSTICO WEBSOCKET:', status);
+    return status;
+}
+
+/**
+ * CORRECCIÓN: Limpiar completamente el WebSocket
+ */
+export function cleanupWebSocket() {
+    console.log('🧹 Limpiando WebSocket...');
+    disconnectWebSocket();
+    connectionState = 'disconnected';
+    console.log('✅ WebSocket limpiado completamente');
+}
+
+/**
+ * Verifica si el panel de notificaciones está activo
+ */
+function isNotificationsPanelActive() {
+    const notificationsPanel = document.getElementById('notifications-panel');
+    return notificationsPanel && notificationsPanel.classList.contains('active');
+}
+
+/**
+ * Desplaza el contenedor de mensajes al final
+ */
+function scrollToBottom() {
+    const messagesContainer = document.getElementById('messages-container');
+    if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+}
