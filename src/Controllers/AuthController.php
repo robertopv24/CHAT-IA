@@ -10,6 +10,7 @@ use PDO;
 use PDOException;
 use Exception;
 use Foxia\Services\ConfigService;
+use Foxia\Services\CsrfService;
 
 class AuthController
 {
@@ -193,10 +194,11 @@ class AuthController
     {
         header('Content-Type: application/json');
 
-        // Verificar que la solicitud sea POST
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Método no permitido']);
+        // Validar token CSRF
+        $csrfToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+        if (!CsrfService::validateToken($csrfToken)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Token CSRF inválido o ausente']);
             return;
         }
 

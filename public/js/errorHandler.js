@@ -1,6 +1,12 @@
 // errorHandler.js - Estrategia unificada de manejo de errores
 class ErrorHandler {
     static handle(error, context, metadata = {}) {
+        // ✅ CORRECCIÓN: Si metadata tiene silent, no procesar logs pesados
+        if (metadata.silent) {
+            console.log(`ℹ️ [SILENT] Error silenciado en ${context}:`, error.message);
+            return;
+        }
+
         const errorInfo = this.normalizeError(error, context, metadata);
 
         // Log para desarrollo

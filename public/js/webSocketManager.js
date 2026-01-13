@@ -379,11 +379,7 @@ export class WebSocketManager {
             }
         }
 
-        // CORRECCIÓN: Limpiar todos los handlers para prevenir memory leaks
-        this.messageHandlers.clear();
-        this.openHandlers.clear();
-        this.closeHandlers.clear();
-        this.errorHandlers.clear();
+        // NOTA: No limpiar los handlers aquí, ya que se registran antes de llamar a connect()
     }
 
     /**

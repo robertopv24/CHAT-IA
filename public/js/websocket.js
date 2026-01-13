@@ -8,7 +8,7 @@ import ErrorHandler from './errorHandler.js';
 
 let webSocketManager = null;
 // CORRECCIÓN: Estado unificado de conexión
-let connectionState = 'disconnected'; // 'disconnected', 'connecting', 'connected', 'reconnecting'
+let connectionState = 'disconnected'; // 'disconnected', 'connecting', 'connected', 'authenticated', 'reconnecting'
 
 /**
  * Inicializa y conecta el WebSocketManager de forma controlada
@@ -70,30 +70,37 @@ async function establishWebSocketConnection() {
     setupWebSocketHandlers();
 
     return new Promise((resolve, reject) => {
+        let unbindOpen, unbindError;
+
         const timeout = setTimeout(() => {
+            cleanup();
             reject(new Error('Timeout de conexión WebSocket (10s)'));
         }, 10000);
 
         const cleanup = () => {
+            console.log('🧹 Limpiando handlers de conexión temporal');
             clearTimeout(timeout);
-            webSocketManager.offOpen(openHandler);
-            webSocketManager.offError(errorHandler);
+            if (unbindOpen) unbindOpen();
+            if (unbindError) unbindError();
         };
 
         const openHandler = () => {
+            console.log('✅ Handshake de conexión exitoso, resolviendo promesa');
             cleanup();
             resolve();
         };
 
         const errorHandler = (error) => {
+            console.error('❌ Error durante el handshake inicial:', error);
             cleanup();
             reject(error);
         };
 
-        webSocketManager.onOpen(openHandler);
-        webSocketManager.onError(errorHandler);
+        unbindOpen = webSocketManager.onOpen(openHandler);
+        unbindError = webSocketManager.onError(errorHandler);
 
         // Iniciar conexión
+        console.log('🚀 Llamando a webSocketManager.connect()...');
         if (!webSocketManager.connect()) {
             cleanup();
             reject(new Error('No se pudo iniciar la conexión WebSocket'));
@@ -137,48 +144,46 @@ function setupWebSocketHandlers() {
  * Maneja la apertura exitosa de la conexión
  */
 function handleWebSocketOpen(event) {
-    console.log('✅ Conexión WebSocket establecida', event);
+    console.log('⚡ [WS DEBUG] Conexión física establecida. Iniciando autenticación...');
 
     connectionState = 'connected';
     stateManager.setWebSocketState(true, webSocketManager.ws);
 
     if (document.getElementById('connection-status')) {
-        document.getElementById('connection-status').textContent = 'Conectado (WebSocket)';
-        document.getElementById('connection-status').style.color = 'var(--success)';
+        document.getElementById('connection-status').textContent = 'Autenticando...';
+        document.getElementById('connection-status').style.color = 'var(--warning)';
     }
 
-    // Autenticar inmediatamente después de conectar
+    // Autenticar inmediatamente
     authenticateWebSocket();
-
-    showNotification('Conexión en tiempo real activada', 'success');
 }
 
 /**
  * Autentica el WebSocket con el servidor
  */
 function authenticateWebSocket() {
+    console.log('🔐 [WS DEBUG] Preparando mensaje de autenticación...');
     const token = getCookie('auth_token');
     const currentState = stateManager.getState();
 
     if (token && currentState.currentUser) {
-        const chatUuids = Array.from(document.querySelectorAll('.chat-item'))
-                            .map(item => item.dataset.uuid)
-                            .filter(uuid => uuid);
-
         const authMessage = {
             type: 'auth',
-            token: token,
-            chats: chatUuids
+            token: token
         };
 
+        console.log('🚀 [WS DEBUG] Enviando mensaje auth al servidor...');
         if (webSocketManager.send(authMessage)) {
-            console.log('🔐 Enviando autenticación WebSocket con chats:', chatUuids);
+            console.log('✅ [WS DEBUG] Mensaje auth enviado!');
         } else {
-            console.error('❌ No se pudo enviar autenticación WebSocket');
+            console.error('❌ [WS DEBUG] Falló el envío del mensaje auth');
             ErrorHandler.handleNetworkError('websocket_auth_send');
         }
     } else {
-        console.warn('⚠️ No hay token de autenticación o usuario para WebSocket');
+        console.warn('⚠️ [WS DEBUG] No se pudo autenticar: Token o Usuario faltante', {
+            hasToken: !!token,
+            hasUser: !!currentState.currentUser
+        });
     }
 }
 
@@ -186,7 +191,25 @@ function authenticateWebSocket() {
  * Maneja éxito de autenticación
  */
 function handleAuthSuccess(data) {
-    console.log('✅ Autenticación WebSocket exitosa');
+    console.log('✅ [WS DEBUG] Autenticación WebSocket exitosa confirmada por servidor');
+    connectionState = 'authenticated';
+
+    if (document.getElementById('connection-status')) {
+        document.getElementById('connection-status').textContent = 'Conectado (Autenticado)';
+        document.getElementById('connection-status').style.color = 'var(--success)';
+    }
+
+    showNotification('Conexión en tiempo real activada', 'success');
+
+    // Suscribirse a chats que ya están en el DOM
+    const chatUuids = Array.from(document.querySelectorAll('.chat-item'))
+        .map(item => item.dataset.uuid)
+        .filter(uuid => uuid);
+
+    if (chatUuids.length > 0) {
+        console.log(`📡 [WS DEBUG] Suscribiendo automáticamente a ${chatUuids.length} chats existentes`);
+        chatUuids.forEach(uuid => subscribeToChat(uuid));
+    }
 
     // Suscribirse al chat actual si existe
     const state = stateManager.getState();
@@ -212,11 +235,20 @@ function handleAuthError(data) {
  * Maneja nuevo mensaje
  */
 function handleNewMessage(data) {
-    console.log('💬 Nuevo mensaje recibido via WebSocket', data);
+    console.log('💬 [WS DEBUG] Nuevo mensaje recibido:', data);
 
     const messageChatUuid = data.chat_uuid;
     const state = stateManager.getState();
-    const isForCurrentChat = state.currentChat && messageChatUuid === state.currentChat.uuid;
+    const currentChat = state.currentChat;
+    const currentChatUuid = currentChat ? currentChat.uuid : null;
+    const isForCurrentChat = currentChatUuid && messageChatUuid === currentChatUuid;
+
+    console.log('💬 [WS DEBUG] Inspección de estado:', {
+        recibidoUuid: messageChatUuid,
+        actualUuid: currentChatUuid,
+        chatActualObjeto: currentChat,
+        esParaEsteChat: isForCurrentChat
+    });
 
     if (messageChatUuid) {
         // Actualizar la lista de chats siempre
@@ -347,20 +379,27 @@ function handleWebSocketClose(event) {
  * Suscribe a un chat específico
  */
 export function subscribeToChat(chatUuid) {
-    if (webSocketManager && webSocketManager.isConnected) {
-        const subscribeMessage = {
-            type: 'subscribe',
-            chat_uuid: chatUuid
-        };
+    if (!webSocketManager || !chatUuid) return;
 
-        if (webSocketManager.send(subscribeMessage)) {
-            console.log(`📋 Suscribiéndose al chat: ${chatUuid}`);
-        } else {
-            console.error(`❌ No se pudo suscribir al chat: ${chatUuid}`);
-            ErrorHandler.handleNetworkError('websocket_subscribe');
+    if (connectionState !== 'authenticated') {
+        console.warn(`⏳ [WS DEBUG] Postponiendo suscripción a ${chatUuid}: Esperando autenticación...`);
+        // Si ya estamos conectados pero no autenticados, reintentar en un momento
+        if (connectionState === 'connected') {
+            setTimeout(() => subscribeToChat(chatUuid), 500);
         }
+        return;
+    }
+
+    const subscribeMessage = {
+        type: 'subscribe',
+        chat_uuid: chatUuid
+    };
+
+    if (webSocketManager.send(subscribeMessage)) {
+        console.log(`📡 [WS DEBUG] Suscripción enviada para chat: ${chatUuid}`);
     } else {
-        console.warn('⚠️ WebSocket no conectado, no se puede suscribir al chat');
+        console.error(`❌ No se pudo suscribir al chat: ${chatUuid}`);
+        ErrorHandler.handleNetworkError('websocket_subscribe');
     }
 }
 

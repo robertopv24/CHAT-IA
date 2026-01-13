@@ -1,9 +1,9 @@
 // chat/chatUI.js - VERSIÓN CORREGIDA CON EXPORTACIONES COMPLETAS
-import { apiCall } from '../api.js';
+import { apiCall, getCookie } from '../api.js';
 import { subscribeToChat } from '../websocket.js';
 import stateManager from '../stateManager.js';
 import { elements } from '../elements.js';
-import { showNotification, showPanel, scrollToBottom } from '../utils.js';
+import { showNotification, scrollToBottom, showPanel } from '../utils.js';
 import { MessageRenderer } from './messageRenderer.js';
 import { SearchManager } from './searchManager.js';
 import { ChatManager } from './chatManager.js';
@@ -24,6 +24,13 @@ export async function fetchChats() {
         console.error('Error fetching chats:', error);
         showNotification('Error al cargar chats: ' + error.message, 'error');
     }
+}
+
+/**
+ * Renderiza la lista de chats (wrapper para ChatManager)
+ */
+export function renderChats(chats) {
+    ChatManager.renderChats(chats);
 }
 
 /**
@@ -67,17 +74,16 @@ function updateUnreadCounts(chats) {
  * Carga un chat específico
  */
 export function loadChat(chat) {
-    // Actualizar estado
-    stateManager.update(state => {
-        state.currentChat = chat;
-    });
+    console.log('📂 [UI DEBUG] Cargando chat:', chat ? chat.uuid : 'null', chat);
+
+    // Actualizar estado usando el método específico para diagnóstico
+    stateManager.setCurrentChat(chat);
 
     // Actualizar UI del header del chat
     updateChatHeader(chat);
 
-    // Mostrar panel de chat
-    if (elements.chatPanel) elements.chatPanel.classList.add('active');
-    if (elements.chatsPanel) elements.chatsPanel.classList.remove('active');
+    // Mostrar panel de chat usando la función centralizada
+    showPanel('chat-panel');
 
     // Cargar mensajes y suscribirse
     fetchMessages(chat.uuid);
@@ -193,20 +199,34 @@ export function renderMessages(messages) {
  * Agrega un mensaje al chat
  */
 export function addMessageToChat(message, isReply = false, replyingTo = null) {
-    if (!elements.messagesContainer) return;
+    console.log('🖥️ [UI DEBUG] Intentando añadir mensaje al chat:', message.uuid);
+    if (!elements.messagesContainer) {
+        console.error('❌ [UI DEBUG] No se encontró elements.messagesContainer!');
+        return;
+    }
 
     // Eliminar estado vacío si existe
     const emptyState = elements.messagesContainer.querySelector('.empty-chat-state');
     if (emptyState) {
         emptyState.remove();
+        console.log('✅ [UI DEBUG] Estado vacío eliminado');
     }
 
     // Eliminar duplicados (mensajes temporales)
     removeDuplicateMessage(message.uuid);
 
     // Renderizar mensaje
+    console.log('🎨 [UI DEBUG] Renderizando mensaje con MessageRenderer...', { message, isReply, replyingTo });
     const messageElement = MessageRenderer.renderMessage(message, isReply, replyingTo);
+
+    if (!messageElement) {
+        console.error('❌ [UI DEBUG] MessageRenderer.renderMessage() retornó null/undefined!');
+        return;
+    }
+
+    console.log('✅ [UI DEBUG] Elemento de mensaje creado, añadiendo al DOM...');
     elements.messagesContainer.appendChild(messageElement);
+    console.log('✅ [UI DEBUG] Mensaje añadido al DOM exitosamente');
 
     // Ocultar indicador de "pensando" para mensajes de IA
     if (message.ai_model && elements.thinkingContainer) {
@@ -214,6 +234,7 @@ export function addMessageToChat(message, isReply = false, replyingTo = null) {
     }
 
     scrollToBottom();
+    console.log('✅ [UI DEBUG] Scroll completado - mensaje visible');
 }
 
 /**
@@ -390,7 +411,7 @@ export function updateChatInList(chatUuid, updates) {
             const previewElement = chatElement.querySelector('.chat-preview');
             if (previewElement) {
                 previewElement.textContent = updates.lastMessage.content.substring(0, 50) +
-                                           (updates.lastMessage.content.length > 50 ? '...' : '');
+                    (updates.lastMessage.content.length > 50 ? '...' : '');
             }
         }
 

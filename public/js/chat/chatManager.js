@@ -112,23 +112,22 @@ export class ChatManager {
         });
     }
 
-    /**
-     * Muestra el menú contextual del chat
-     */
     static showChatContextMenu(event, chat) {
-        const { elements } = require('../elements.js');
+        // En ES Modules usamos imports estáticos o dinámicos, Elements ya debería estar disponible vía el objeto global si se importó adecuadamente, 
+        // pero lo correcto es importarlo.
+        import('../elements.js').then(({ elements }) => {
+            stateManager.setActiveContextMenuChat(chat);
 
-        stateManager.setActiveContextMenuChat(chat);
+            if (elements.newChatMenu) {
+                elements.newChatMenu.classList.add('hidden');
+            }
 
-        if (elements.newChatMenu) {
-            elements.newChatMenu.classList.add('hidden');
-        }
-
-        if (elements.contextMenu) {
-            elements.contextMenu.style.top = `${event.clientY}px`;
-            elements.contextMenu.style.left = `${event.clientX}px`;
-            elements.contextMenu.classList.remove('hidden');
-        }
+            if (elements.contextMenu) {
+                elements.contextMenu.style.top = `${event.clientY}px`;
+                elements.contextMenu.style.left = `${event.clientX}px`;
+                elements.contextMenu.classList.remove('hidden');
+            }
+        });
     }
 
     /**
@@ -264,7 +263,7 @@ export class ChatManager {
 
             if (previewElement) {
                 previewElement.textContent = lastMessage.content.substring(0, 10) +
-                                           (lastMessage.content.length > 10 ? '...' : '');
+                    (lastMessage.content.length > 10 ? '...' : '');
             }
             if (timeElement) {
                 timeElement.textContent = formatDate(lastMessage.created_at);

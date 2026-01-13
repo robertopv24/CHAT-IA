@@ -16,7 +16,7 @@ class AppState {
             replyingToMessage: null,
             activeContextMenuMessage: null,
             hostname: window.location.hostname,
-            apiBaseUrl: window.location.origin + '/public',
+            apiBaseUrl: window.location.origin, // Eliminado /public que causaba 404
             isLocalhost: this.#checkIsLocalhost()
         };
 
@@ -25,9 +25,9 @@ class AppState {
 
     #checkIsLocalhost() {
         return window.location.hostname === 'localhost' ||
-               window.location.hostname === '127.0.0.1' ||
-               window.location.hostname === 'foxia.duckdns.org' ||
-               window.location.hostname === '';
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname === 'foxia.duckdns.org' ||
+            window.location.hostname === '';
     }
 
     /**
@@ -119,6 +119,7 @@ class AppState {
     }
 
     setCurrentChat(chat) {
+        console.log('📍 [STATE DEBUG] Estableciendo chat actual:', chat ? chat.uuid : 'null');
         this.update(state => {
             state.currentChat = chat;
         });

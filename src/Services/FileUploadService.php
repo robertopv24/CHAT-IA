@@ -532,7 +532,12 @@ class FileUploadService
         // Crear archivo index.html para prevenir listado de directorios
         $indexFile = $directory . 'index.html';
         if (!file_exists($indexFile)) {
-            file_put_contents($indexFile, '<!DOCTYPE html><html><head><title>403 Forbidden</title></head><body><h1>Forbidden</h1><p>You don\'t have permission to access this directory.</p></body></html>');
+            try {
+                file_put_contents($indexFile, '<!DOCTYPE html><html><head><title>403 Forbidden</title></head><body><h1>Forbidden</h1><p>You don\'t have permission to access this directory.</p></body></html>');
+            } catch (\Throwable $e) {
+                // Silenciar errores de permisos en archivo índice, no es crítico
+                error_log("⚠️ No se pudo crear index.html en {$directory}: " . $e->getMessage());
+            }
         }
     }
 
@@ -941,7 +946,7 @@ class FileUploadService
                 self::ensureDirectoryExists($directory);
             }
 
-            error_log("✅ Servicio de upload de archivos inicializado correctamente");
+
 
         } catch (Exception $e) {
             error_log("❌ Error inicializando servicio de upload: " . $e->getMessage());

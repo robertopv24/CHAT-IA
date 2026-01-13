@@ -6,6 +6,8 @@ import { ModalEventListeners } from './modalEventListeners.js';
 import { FileEventListeners } from './fileEventListeners.js';
 import { hideContextMenus } from '../utils.js';
 import stateManager from '../stateManager.js';
+import { initializeContactsSystem } from '../contactsUI.js';
+import { setupAvatarUploadListeners } from '../avatarUI.js';
 
 export function setupEventListeners() {
     console.log('🔧 Configurando todos los event listeners...');
@@ -19,6 +21,16 @@ export function setupEventListeners() {
 
     // Configurar listeners globales
     setupGlobalListeners();
+
+    // Inicializar subsistemas UI
+    initializeContactsSystem();
+    setupAvatarUploadListeners();
+
+    // Precargar EmojiService
+    import('../emojiService.js').then(({ EmojiService }) => {
+        // La instancia se crea automáticamente al importar, pero forzamos la carga
+        console.log('✅ EmojiService precargado');
+    });
 
     console.log('✅ Todos los event listeners configurados correctamente');
 }
@@ -92,7 +104,7 @@ function setupPeriodicUpdates() {
 }
 
 // Re-conectar WebSocket cuando la página gana foco
-window.addEventListener('focus', function() {
+window.addEventListener('focus', function () {
     const state = stateManager.getState();
     if (state.isAuthenticated && !state.isWebSocketConnected) {
         console.log('🔍 Página en foco - Reconectando WebSocket...');

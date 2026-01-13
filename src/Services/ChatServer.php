@@ -18,16 +18,18 @@ class ChatServer implements MessageComponentInterface
     private $chatConnections;
     private $connectionUsers;
     private $connectionChats;
-    private $metricsCallback; // 🔥 NUEVA PROPIEDAD PARA EL CALLBACK DE MÉTRICAS
+    private $metricsCallback;
+    private $db;
 
-    public function __construct()
+    public function __construct($db = null)
     {
         $this->clients = new SplObjectStorage;
         $this->userConnections = [];
         $this->chatConnections = [];
         $this->connectionUsers = [];
         $this->connectionChats = [];
-        $this->metricsCallback = null; // 🔥 INICIALIZAR EL CALLBACK COMO NULL
+        $this->metricsCallback = null;
+        $this->db = $db;
         error_log("🔄 Servidor de Chat Fox-IA iniciado...");
     }
 
@@ -54,6 +56,9 @@ class ChatServer implements MessageComponentInterface
         }
     }
 
+    /**
+     * @param ConnectionInterface|\stdClass $conn
+     */
     public function onOpen(ConnectionInterface $conn)
     {
         $this->clients->attach($conn);
@@ -72,81 +77,89 @@ class ChatServer implements MessageComponentInterface
         ]);
     }
 
-    public function onMessage(ConnectionInterface $from, $msg)
+    /**
+     * @param ConnectionInterface|\stdClass $conn
+     */
+    public function onMessage(ConnectionInterface $conn, $msg)
     {
+        error_log("📨 Mensaje WebSocket recibido de {$conn->resourceId}: $msg");
         try {
             $data = json_decode($msg, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
-                $this->sendError($from, 'JSON inválido');
+                $this->sendError($conn, 'JSON inválido');
                 $this->reportMetric('error_occurred', [
                     'type' => 'json_decode_error',
-                    'connection_id' => $from->resourceId,
+                    'connection_id' => $conn->resourceId,
                     'message' => 'JSON inválido'
                 ]);
                 return;
             }
 
             if (!isset($data['type'])) {
-                $this->sendError($from, 'Tipo de mensaje no especificado');
+                $this->sendError($conn, 'Tipo de mensaje no especificado');
                 $this->reportMetric('error_occurred', [
                     'type' => 'missing_message_type',
-                    'connection_id' => $from->resourceId
+                    'connection_id' => $conn->resourceId
                 ]);
                 return;
             }
 
             switch ($data['type']) {
                 case 'auth':
-                    $this->handleAuthentication($from, $data);
+                    error_log("🔐 Iniciando proceso de autenticación para conexión {$conn->resourceId}");
+                    $this->handleAuthentication($conn, $data);
                     break;
 
                 case 'subscribe':
-                    $this->handleSubscription($from, $data);
+                    $this->handleSubscription($conn, $data);
                     break;
 
                 case 'unsubscribe':
-                    $this->handleUnsubscription($from, $data);
+                    $this->handleUnsubscription($conn, $data);
                     break;
 
                 case 'ping':
-                    $from->send(json_encode(['type' => 'pong', 'timestamp' => date('Y-m-d H:i:s')]));
+                    $conn->send(json_encode(['type' => 'pong', 'timestamp' => date('Y-m-d H:i:s')]));
                     break;
 
                 case 'get_chat_updates':
-                    $this->handleChatUpdates($from, $data);
+                    $this->handleChatUpdates($conn, $data);
                     break;
 
                 default:
-                    $this->sendError($from, 'Tipo de mensaje no reconocido: ' . $data['type']);
+                    $this->sendError($conn, 'Tipo de mensaje no reconocido: ' . $data['type']);
                     $this->reportMetric('error_occurred', [
                         'type' => 'unknown_message_type',
-                        'connection_id' => $from->resourceId,
+                        'connection_id' => $conn->resourceId,
                         'message_type' => $data['type']
                     ]);
             }
 
             // 🔥 REPORTAR MÉTRICA: Mensaje procesado exitosamente
             $this->reportMetric('message_processed', [
-                'connection_id' => $from->resourceId,
+                'connection_id' => $conn->resourceId,
                 'message_type' => $data['type'],
-                'user_id' => $from->userId ?? null
+                'user_id' => $conn->userId ?? null
             ]);
 
         } catch (Exception $e) {
             error_log("❌ Error en onMessage: " . $e->getMessage());
-            $this->sendError($from, 'Error procesando mensaje');
+            $this->sendError($conn, 'Error procesando mensaje');
 
             // 🔥 REPORTAR MÉTRICA: Error en procesamiento de mensaje
             $this->reportMetric('error_occurred', [
                 'type' => 'message_processing_error',
-                'connection_id' => $from->resourceId,
+                'connection_id' => $conn->resourceId,
                 'error' => $e->getMessage(),
-                'user_id' => $from->userId ?? null
+                'user_id' => $conn->userId ?? null
             ]);
         }
     }
 
+    /**
+     * @param ConnectionInterface|\stdClass $conn
+     */
     public function onClose(ConnectionInterface $conn)
     {
         // Limpiar suscripciones de chat primero
@@ -179,7 +192,10 @@ class ChatServer implements MessageComponentInterface
         ]);
     }
 
-    public function onError(ConnectionInterface $conn, Exception $e)
+    /**
+     * @param ConnectionInterface|\stdClass $conn
+     */
+    public function onError(ConnectionInterface $conn, \Exception $e)
     {
         error_log("❌ Error en conexión {$conn->resourceId}: {$e->getMessage()}");
 
@@ -207,14 +223,19 @@ class ChatServer implements MessageComponentInterface
             return;
         }
 
-        $chatUuid = $redisData['chat_uuid'];
-        $messageData = $redisData['message'];
-        $senderId = $redisData['sender_id'] ?? null;
-        $isReply = $redisData['is_reply'] ?? false;
-
         // Manejar notificaciones
         if ($redisData['type'] === 'new_notification') {
             $this->handleNewNotification($redisData);
+            return;
+        }
+
+        $chatUuid = $redisData['chat_uuid'] ?? null;
+        $messageData = $redisData['message'] ?? null;
+        $senderId = $redisData['sender_id'] ?? null;
+        $isReply = $redisData['is_reply'] ?? false;
+
+        if (!$chatUuid || !$messageData) {
+            error_log("❌ Mensaje Redis incompleto para tipo " . $redisData['type']);
             return;
         }
 
@@ -239,8 +260,8 @@ class ChatServer implements MessageComponentInterface
             'timestamp' => $redisData['timestamp'] ?? date('Y-m-d H:i:s')
         ];
 
-        // Enviar a todos los suscriptores del chat
-        $this->broadcastToChat($chatUuid, json_encode($messageForClients), $senderId);
+        // Enviar a todos los suscriptores del chat (incluyendo al remitente para que se renderice en su UI)
+        $this->broadcastToChat($chatUuid, json_encode($messageForClients), null);
 
         // Notificaciones mejoradas
         $this->sendCorrectedPushNotifications($redisData, $senderId);
@@ -435,92 +456,106 @@ class ChatServer implements MessageComponentInterface
     /**
      * Manejar autenticación JWT
      */
-    private function handleAuthentication(ConnectionInterface $conn, array $data)
+    private function handleAuthentication(ConnectionInterface $from, array $data)
     {
         if (!isset($data['token'])) {
-            $this->sendError($conn, 'Token no proporcionado');
+            error_log("❌ Error auth: Token no proporcionado para conexión {$from->resourceId}");
+            $this->sendError($from, 'Token no proporcionado');
             return;
         }
 
+        error_log("🔑 Validando token para conexión {$from->resourceId}...");
         $userId = $this->validateJWT($data['token']);
 
         if ($userId) {
-            $conn->authenticated = true;
-            $conn->userId = $userId;
+            $from->authenticated = true;
+            $from->userId = $userId;
 
-            $this->userConnections[$userId] = $conn;
-            $this->connectionUsers[$conn->resourceId] = $userId;
+            $this->userConnections[$userId] = $from;
+            $this->connectionUsers[$from->resourceId] = $userId;
+            error_log("✅ Usuario {$userId} autenticado exitosamente en conexión {$from->resourceId}");
 
             // Suscribir a chats si se especifican
             if (isset($data['chats']) && is_array($data['chats'])) {
+                error_log("📡 Suscribiendo automáticamente a " . count($data['chats']) . " chats");
                 foreach ($data['chats'] as $chatUuid) {
-                    $this->subscribeToChat($conn, $chatUuid);
+                    $this->subscribeToChat($from, $chatUuid);
                 }
             }
 
-            $conn->send(json_encode([
+            $from->send(json_encode([
                 'type' => 'auth_success',
                 'user_id' => $userId,
                 'timestamp' => date('Y-m-d H:i:s')
             ]));
 
-            error_log("✅ Usuario {$userId} autenticado");
+            error_log("✅ Notificación auth_success enviada a usuario {$userId}");
         } else {
-            $this->sendError($conn, 'Token inválido');
-            $conn->close();
+            error_log("❌ Error auth: Token JWT inválido para conexión {$from->resourceId}");
+            $this->sendError($from, 'Token inválido');
+            $from->close();
         }
     }
 
     /**
      * Manejar suscripción a chat
      */
-    private function handleSubscription(ConnectionInterface $conn, array $data)
+    private function handleSubscription(ConnectionInterface $from, array $data)
     {
-        if (!$conn->authenticated) {
-            $this->sendError($conn, 'Debe autenticarse primero');
+        if (!$from->authenticated) {
+            error_log("❌ Error suscripción: Conexión {$from->resourceId} no autenticada");
+            $this->sendError($from, 'Debe autenticarse primero');
             return;
         }
 
         if (!isset($data['chat_uuid'])) {
-            $this->sendError($conn, 'chat_uuid requerido');
+            $this->sendError($from, 'chat_uuid requerido');
             return;
         }
 
         $chatUuid = $data['chat_uuid'];
-        $this->subscribeToChat($conn, $chatUuid);
+        error_log("📡 Verificando membresía para conexión {$from->resourceId} (Usuario: {$from->userId}) al chat: $chatUuid");
 
-        $conn->send(json_encode([
+        if (!$this->isUserParticipant($from->userId, $chatUuid)) {
+            error_log("❌ Acceso denegado: Usuario {$from->userId} NO es participante del chat $chatUuid");
+            $this->sendError($from, 'No tienes permiso para acceder a este chat');
+            return;
+        }
+
+        $this->subscribeToChat($from, $chatUuid);
+
+        $from->send(json_encode([
             'type' => 'subscribe_success',
             'chat_uuid' => $chatUuid
         ]));
 
-        error_log("✅ Usuario {$conn->userId} suscrito a chat {$chatUuid}");
+        error_log("✅ Usuario {$from->userId} suscrito a chat {$chatUuid}");
     }
 
     /**
      * Manejar desuscripción de chat
      */
-    private function handleUnsubscription(ConnectionInterface $conn, array $data)
+    private function handleUnsubscription(ConnectionInterface $from, array $data)
     {
-        if (!$conn->authenticated) {
-            $this->sendError($conn, 'Debe autenticarse primero');
+        if (!$from->authenticated) {
+            $this->sendError($from, 'Debe autenticarse primero');
             return;
         }
 
         if (!isset($data['chat_uuid'])) {
-            $this->sendError($conn, 'chat_uuid requerido');
+            $this->sendError($from, 'chat_uuid requerido');
             return;
         }
 
         $chatUuid = $data['chat_uuid'];
-        $this->unsubscribeFromChat($conn, $chatUuid);
+        $this->unsubscribeFromChat($from, $chatUuid);
 
-        $conn->send(json_encode([
+        $from->send(json_encode([
             'type' => 'unsubscribe_success',
             'chat_uuid' => $chatUuid
         ]));
 
-        error_log("🔕 Usuario {$conn->userId} desuscrito de chat {$chatUuid}");
+        error_log("🔕 Usuario {$from->userId} desuscrito de chat {$chatUuid}");
     }
 
     /**
@@ -719,5 +754,33 @@ class ChatServer implements MessageComponentInterface
             }
         }
         return $notifiedCount;
+    }
+
+    /**
+     * Verificar si un usuario es participante de un chat - SEGURIDAD CRÍTICA
+     */
+    private function isUserParticipant(int $userId, string $chatUuid): bool
+    {
+        if (!$this->db) {
+            error_log("⚠️ ChatServer: No hay conexión a base de datos para validar membresía. Permitiendo por defecto (Riesgo).");
+            return true;
+        }
+
+        try {
+            // Verificar si el chat existe y el usuario es participante
+            $query = "SELECT 1 FROM chat_participants cp
+                     JOIN chats c ON cp.chat_id = c.id
+                     WHERE cp.user_id = :user_id AND c.uuid = :chat_uuid";
+
+            $stmt = $this->db->prepare($query);
+            $stmt->execute(['user_id' => $userId, 'chat_uuid' => $chatUuid]);
+
+            return (bool)$stmt->fetch();
+
+        } catch (Exception $e) {
+            error_log("❌ Error validando membresía en ChatServer: " . $e->getMessage());
+            // En caso de error de BD, por seguridad denegamos el acceso
+            return false;
+        }
     }
 }

@@ -19,6 +19,7 @@ export class ChatEventListeners {
         await this.setupChatActionListeners();
         await this.setupNavigationListeners();
         await this.setupContextMenuListeners();
+        await this.setupMessageSearchListeners();
         this.setupGlobalChatListeners();
         console.log('✅ Chat event listeners configurados completamente');
     }
@@ -141,6 +142,34 @@ export class ChatEventListeners {
         }
     }
 
+    static async setupMessageSearchListeners() {
+        const { elements } = await import('../elements.js');
+        console.log('🔍 Configurando listeners de búsqueda. Elementos:', {
+            btn: !!elements.messageSearchBtn,
+            input: !!elements.messageSearchInput
+        });
+
+        // Botón Buscar en el modal
+        if (elements.messageSearchBtn) {
+            elements.messageSearchBtn.removeEventListener('click', this.handleMessageSearchAction);
+            elements.messageSearchBtn.addEventListener('click', this.handleMessageSearchAction);
+            console.log('✅ Listener de clic en búsqueda vinculado');
+        }
+
+        // Enter en el input de búsqueda
+        if (elements.messageSearchInput) {
+            elements.messageSearchInput.removeEventListener('keydown', this.handleMessageSearchKeydown);
+            elements.messageSearchInput.addEventListener('keydown', this.handleMessageSearchKeydown);
+            console.log('✅ Listener de Enter en búsqueda vinculado');
+        }
+
+        // Botón Cerrar en el modal
+        if (elements.messageSearchCloseBtn) {
+            elements.messageSearchCloseBtn.removeEventListener('click', this.handleCloseMessageSearch);
+            elements.messageSearchCloseBtn.addEventListener('click', this.handleCloseMessageSearch);
+        }
+    }
+
     // ========== HANDLERS DE MENSAJES CORREGIDOS ==========
 
     static handleSendMessage = async () => {
@@ -179,7 +208,7 @@ export class ChatEventListeners {
         }
     }
 
-    static handleMessageInputInput = async function() {
+    static handleMessageInputInput = async function () {
         const { autoResizeTextarea } = await import('../utils.js');
         autoResizeTextarea(this);
     }
@@ -262,15 +291,43 @@ export class ChatEventListeners {
         });
     }
 
+    static handleMessageSearchAction = async () => {
+        console.log('🖱️ Búsqueda de mensajes disparada');
+        const { SearchManager } = await import('../chat/searchManager.js');
+        await SearchManager.handleMessageSearch();
+    }
+
+    static handleMessageSearchKeydown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            this.handleMessageSearchAction();
+        }
+    }
+
+    static handleCloseMessageSearch = () => {
+        import('../modals.js').then(({ hideMessageSearchModal }) => {
+            hideMessageSearchModal();
+        });
+    }
+
     static handleAttachFile = () => {
+        console.log('📎 Botón de adjuntar archivo presionado');
         const state = stateManager.getState();
         if (!state.currentChat) {
+            console.warn('⚠️ No hay chat activo para subir archivos');
             showNotification('Abre un chat para subir archivos', 'warning');
             return;
         }
-        import('../fileUploadUI.js').then(({ showFileUploadModal }) => {
-            showFileUploadModal();
-        });
+
+        console.log('📂 Importando fileUploadUI...');
+        import('../fileUploadUI.js')
+            .then(({ showFileUploadModal }) => {
+                console.log('✅ fileUploadUI importado, llamando a showFileUploadModal');
+                showFileUploadModal();
+            })
+            .catch(err => {
+                console.error('❌ Error importando fileUploadUI:', err);
+            });
     }
 
     // ========== HANDLERS DE NAVEGACIÓN CORREGIDOS ==========

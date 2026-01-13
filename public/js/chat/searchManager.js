@@ -13,14 +13,19 @@ export class SearchManager {
      * Maneja la búsqueda de mensajes
      */
     static async handleMessageSearch() {
+        console.log('🔍 Iniciando SearchManager.handleMessageSearch()');
+
         if (searchInProgress) {
+            console.log('⚠️ Búsqueda ya en progreso, ignorando');
             showNotification('Ya hay una búsqueda en curso. Por favor, espera.', 'warning');
             return;
         }
 
         const searchTerm = elements.messageSearchInput?.value.trim() || '';
+        console.log('📝 Término de búsqueda:', searchTerm);
 
         if (searchTerm.length < 2) {
+            console.log('⚠️ Término demasiado corto');
             showNotification('Escribe al menos 2 caracteres para buscar.', 'warning');
             return;
         }
@@ -38,10 +43,12 @@ export class SearchManager {
                 return;
             }
 
+            console.log('📡 Llamando a API de búsqueda con UUID:', state.currentChat.uuid);
             const data = await apiCall(
                 `/api/chat/search?chat_uuid=${state.currentChat.uuid}&term=${encodeURIComponent(searchTerm)}`
             );
 
+            console.log('✅ Datos recibidos de la API:', data);
             this.renderMessageSearchResults(data.messages || []);
 
         } catch (error) {
@@ -62,7 +69,11 @@ export class SearchManager {
      * Renderiza los resultados de búsqueda
      */
     static renderMessageSearchResults(results) {
-        if (!elements.messageSearchResults) return;
+        console.log('🖼️ Renderizando resultados de búsqueda:', results.length);
+        if (!elements.messageSearchResults) {
+            console.error('❌ elements.messageSearchResults no encontrado');
+            return;
+        }
 
         elements.messageSearchResults.innerHTML = '';
 

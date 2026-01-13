@@ -26,6 +26,8 @@ export async function checkAuthStatus() {
 
             showApp();
             fetchChats();
+            // Cargar contactos
+            import('./contactsUI.js').then(({ fetchContacts }) => fetchContacts());
             updateProfileInfo();
 
             if (elements.connectionStatus) {
@@ -81,6 +83,8 @@ export async function handleLogin() {
 
         showApp();
         fetchChats();
+        // Cargar contactos
+        import('./contactsUI.js').then(({ fetchContacts }) => fetchContacts());
         updateProfileInfo();
 
         if (elements.connectionStatus) {

@@ -4,6 +4,7 @@
 namespace Foxia\Controllers;
 
 use Foxia\Config\Database;
+use Foxia\Services\CsrfService;
 use PDO;
 
 class AdminController
@@ -128,6 +129,14 @@ class AdminController
         if (!$this->verifyAdminInDatabase($userId)) {
             http_response_code(403);
             echo json_encode(['error' => 'Se requieren permisos de administrador']);
+            return;
+        }
+
+        // Validar token CSRF
+        $csrfToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+        if (!CsrfService::validateToken($csrfToken)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Token CSRF inválido o ausente']);
             return;
         }
 
@@ -407,6 +416,14 @@ class AdminController
         if (!$this->verifyAdminInDatabase($userId)) {
             http_response_code(403);
             echo json_encode(['error' => 'Se requieren permisos de administrador']);
+            return;
+        }
+
+        // Validar token CSRF
+        $csrfToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+        if (!CsrfService::validateToken($csrfToken)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Token CSRF inválido o ausente']);
             return;
         }
 

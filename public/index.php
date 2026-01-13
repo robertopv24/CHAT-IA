@@ -176,7 +176,7 @@
             <div class="modal-body">
                 <div class="search-box mb-4">
                     <input type="text" id="message-search-input" class="modal-input" placeholder="Texto a buscar...">
-                    <button id="message-search-btn" class="btn-primary">Buscar</button>
+                    <button id="message-search-btn" class="modal-btn primary">Buscar</button>
                 </div>
                 <div id="message-search-results" class="search-results">
                 </div>
@@ -425,10 +425,6 @@
                 <div id="history-content" class="history-content"></div>
             </div>
 
-            <!-- Selector de emojis -->
-            <div id="emoji-picker-container" class="hidden">
-                <emoji-picker id="emoji-picker" class="dark"></emoji-picker>
-            </div>
 
             <!-- Área de mensajes -->
             <div class="messages-container" id="messages-container">
@@ -453,6 +449,10 @@
 
             <!-- Input de mensaje -->
             <div class="message-input-container">
+                <!-- Selector de emojis movido aquí -->
+                <div id="emoji-picker-container" class="hidden">
+                    <emoji-picker id="emoji-picker" class="dark"></emoji-picker>
+                </div>
                 <div class="input-actions">
                     <i class="far fa-face-smile" id="emoji-btn" style="cursor: pointer;"></i>
                     <i class="fas fa-paperclip" id="attach-file-btn"></i>

@@ -1,6 +1,4 @@
 <?php
-// src/router.php - VERSIÓN COMPLETA CON PANEL DE ADMINISTRACIÓN
-ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
@@ -28,6 +26,7 @@ use Foxia\Middleware\AuthMiddleware;
 use Foxia\Middleware\AdminMiddleware;
 use Foxia\Config\Database;
 use Foxia\Services\ConfigService;
+use Foxia\Services\CsrfService;
 
 // Configuración de zona horaria
 date_default_timezone_set('America/Mexico_City');
@@ -89,18 +88,26 @@ if (strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false) {
 }
 
 // Manejo de errores global
-set_error_handler(function($errno, $errstr, $errfile, $errline) {
+set_error_handler(function ($errno, $errstr, $errfile, $errline) {
+    if (!(error_reporting() & $errno)) {
+        return false;
+    }
+    
+    // Ignorar errores menores en producción
+    if (in_array($errno, [E_NOTICE, E_DEPRECATED, E_USER_DEPRECATED])) {
+        return true;
+    }
     $errorTypes = [
         E_ERROR => 'Error',
         E_WARNING => 'Warning',
         E_PARSE => 'Parse Error',
         E_NOTICE => 'Notice',
-        E_STRICT => 'Strict',
         E_DEPRECATED => 'Deprecated'
     ];
 
     $errorType = $errorTypes[$errno] ?? 'Unknown Error';
-    error_log("🚨 Error PHP [{$errorType}]: $errstr en $errfile línea $errline");
+    $msg = "🚨 Error PHP [{$errorType}]: $errstr en $errfile línea $errline";
+    error_log($msg);
 
     if ((ConfigService::get('APP_ENV') ?? 'development') === 'production') {
         $errorMessage = 'Error interno del servidor';
@@ -114,7 +121,8 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
 });
 
 set_exception_handler(function($exception) {
-    error_log("💥 Excepción no capturada: " . $exception->getMessage() . " en " . $exception->getFile() . ":" . $exception->getLine());
+    $msg = "💥 Excepción no capturada: " . $exception->getMessage() . " en " . $exception->getFile() . ":" . $exception->getLine() . "\nTrace: " . $exception->getTraceAsString();
+    error_log($msg);
 
     if ((ConfigService::get('APP_ENV') ?? 'development') === 'production') {
         $errorMessage = 'Error interno del servidor';
@@ -223,6 +231,7 @@ $routes = [
             loadControllerIfNeeded('Foxia\Controllers\AuthController');
             (new AuthController())->login();
         },
+
         '/api/user/contacts/add' => function() {
             if (!AuthMiddleware::handle()) return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
@@ -306,9 +315,20 @@ $routes = [
             if (!AdminMiddleware::handle()) return;
             loadControllerIfNeeded('Foxia\Controllers\AdminController');
             (new AdminController())->manageUser();
+        },
+        '/api/logs/error' => function() {
+            // Ruta silenciosa para registrar errores del frontend
+            $input = $GLOBALS['input_json'] ?? json_decode(file_get_contents('php://input'), true);
+            error_log("💻 Frontend Error: " . json_encode($input));
+            http_response_code(200);
+            echo json_encode(['status' => 'logged']);
         }
     ],
     'GET' => [
+        '/api/auth/csrf-token' => function() {
+            header('Content-Type: application/json');
+            echo json_encode(['csrf_token' => CsrfService::generateToken()]);
+        },
         '/api/auth/verify-email' => function() {
             try {
                 loadControllerIfNeeded('Foxia\Controllers\AuthController');
@@ -415,9 +435,12 @@ $routes = [
             }
 
             try {
+                $redisHost = ConfigService::get('REDIS_HOST') ?? '127.0.0.1';
+                $redisPort = ConfigService::get('REDIS_PORT') ?? 6379;
+                
                 $redis = new Predis\Client([
-                    'host' => ConfigService::get('REDIS_HOST') ?? '127.0.0.1',
-                    'port' => ConfigService::get('REDIS_PORT') ?? 6379,
+                    'host' => $redisHost,
+                    'port' => $redisPort,
                 ]);
                 $redis->ping();
                 $services['redis'] = 'connected';

@@ -4,6 +4,7 @@ import { showNotification } from './utils.js';
 import { elements } from './elements.js';
 import stateManager from './stateManager.js';
 import ErrorHandler from './errorHandler.js';
+import { addMessageToChat } from './chat/chatUI.js';
 
 class FileUploadManager {
     constructor() {
@@ -89,7 +90,7 @@ class FileUploadManager {
         return {
             successful: results.filter(r => r.status === 'fulfilled' && r.value.success).map(r => r.value),
             failed: results.filter(r => r.status === 'fulfilled' && !r.value.success).map(r => r.value)
-                         .concat(results.filter(r => r.status === 'rejected').map(r => r.reason))
+                .concat(results.filter(r => r.status === 'rejected').map(r => r.reason))
         };
     }
 
@@ -112,27 +113,27 @@ class FileUploadManager {
                     }
                 }
             )
-            .then(response => {
-                this.updateUploadProgress(fileIndex, 100);
-                console.log(`✅ Archivo subido: ${file.name}`, response);
-                resolve(response);
-            })
-            .catch(error => {
-                console.error(`❌ Error subiendo archivo ${file.name}:`, error);
+                .then(response => {
+                    this.updateUploadProgress(fileIndex, 100);
+                    console.log(`✅ Archivo subido: ${file.name}`, response);
+                    resolve(response);
+                })
+                .catch(error => {
+                    console.error(`❌ Error subiendo archivo ${file.name}:`, error);
 
-                // ✅ CORRECCIÓN: Marcar error específico en UI
-                this.markUploadError(fileIndex, error);
+                    // ✅ CORRECCIÓN: Marcar error específico en UI
+                    this.markUploadError(fileIndex, error);
 
-                // ✅ CORRECCIÓN: Usar manejador unificado de errores
-                ErrorHandler.handle(error, 'upload_single_file', {
-                    fileName: file.name,
-                    fileSize: file.size,
-                    fileType: file.type,
-                    chatUuid: chatUuid
+                    // ✅ CORRECCIÓN: Usar manejador unificado de errores
+                    ErrorHandler.handle(error, 'upload_single_file', {
+                        fileName: file.name,
+                        fileSize: file.size,
+                        fileType: file.type,
+                        chatUuid: chatUuid
+                    });
+
+                    reject(error);
                 });
-
-                reject(error);
-            });
         });
     }
 
@@ -337,7 +338,7 @@ export function setupFileUploadListeners() {
     console.log('✅ Elemento fileUpload encontrado');
 
     // Listener para selección de archivos
-    elements.fileUpload.addEventListener('change', function(event) {
+    elements.fileUpload.addEventListener('change', function (event) {
         console.log('📁 Archivos seleccionados:', event.target.files);
         handleFileSelect(event);
     });
@@ -348,7 +349,7 @@ export function setupFileUploadListeners() {
     }
 
     if (elements.fileUploadConfirm) {
-        elements.fileUploadConfirm.addEventListener('click', function() {
+        elements.fileUploadConfirm.addEventListener('click', function () {
             console.log('🔼 Botón de subir clickeado');
             handleFileUpload();
         });
@@ -362,7 +363,7 @@ export function setupFileUploadListeners() {
     }
 
     if (elements.fileUploadCancel) {
-        elements.fileUploadCancel.addEventListener('click', function() {
+        elements.fileUploadCancel.addEventListener('click', function () {
             console.log('❌ Botón de cancelar clickeado');
             hideFileUploadModal();
         });
@@ -513,17 +514,41 @@ export async function handleFileUpload() {
         return;
     }
 
+
     // ✅ CORRECCIÓN: Usar el manager para la subida
     const results = await fileUploadManager.uploadAllFiles(state.currentChat.uuid);
 
     if (results.successful.length > 0) {
         hideFileUploadModal();
 
-        // Recargar mensajes del chat para mostrar los archivos subidos
-        if (state.currentChat) {
-            const { fetchMessages } = await import('./chatUI.js');
-            fetchMessages(state.currentChat.uuid);
-        }
+        console.log('✅ Archivos subidos exitosamente, renderizando localmente...');
+
+        results.successful.forEach(item => {
+            const result = item.result;
+            if (result && result.message_uuid) {
+                // Construir objeto de mensaje compatible con el renderizador
+                const message = {
+                    uuid: result.message_uuid,
+                    id: result.message_id,
+                    message_type: result.message_type,
+                    file_data: {
+                        file_url: result.file_info.file_path, // Mapear path a url para el renderizador
+                        original_name: result.file_info.original_name,
+                        file_size: result.file_info.file_size,
+                        mime_type: result.file_info.mime_type
+                    },
+                    user_id: state.currentUser?.id,
+                    created_at: result.timestamp,
+                    chat_id: state.currentChat.id,
+                    user: state.currentUser
+                };
+
+                console.log('🎨 Renderizando mensaje de archivo localmente:', message.uuid);
+                addMessageToChat(message);
+            }
+        });
+
+        console.log('✅ Renderizado local completado');
     }
 }
 

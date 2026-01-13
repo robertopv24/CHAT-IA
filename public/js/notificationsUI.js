@@ -1,8 +1,7 @@
-// notificationsUI.js - Gestión de la UI de Notificaciones
 import { apiCall } from './api.js';
 import { elements } from './elements.js';
-import { showNotification, formatDate } from './utils.js';
-import { loadChat, fetchChats } from './chatUI.js';
+import { showNotification, formatDate, showPanel } from './utils.js';
+import { loadChat, fetchChats } from './chat/chatUI.js';
 
 export function updateNotificationBadge(increment = 0) {
     if (!elements.notificationBadge) return;
@@ -36,8 +35,8 @@ export function addNotificationToList(notification) {
         <div class="notification-actions">
             <button class="btn-mark-read" data-id="${notification.id}"><i class="fas fa-check-double"></i></button>
             ${notification.chat_uuid && notification.chat_uuid !== 'unknown' ?
-                `<button class="btn-go-to-chat" data-chat-uuid="${notification.chat_uuid}">Ir al chat</button>` :
-                ''}
+            `<button class="btn-go-to-chat" data-chat-uuid="${notification.chat_uuid}">Ir al chat</button>` :
+            ''}
         </div>
     `;
 
@@ -90,7 +89,8 @@ export async function markNotificationAsRead(notificationId) {
     try {
         await apiCall('/api/notifications/mark-read', {
             method: 'POST',
-            body: { notification_id: notificationId }
+            body: { notification_id: notificationId },
+            silent: true // ✅ Evitar que el ErrorHandler global lo reporte si falla con 404
         });
 
         // Remover de la lista UI
@@ -104,6 +104,11 @@ export async function markNotificationAsRead(notificationId) {
 
         showNotification('Notificación marcada como leída', 'success');
     } catch (error) {
+        // Si el error es 404, probablemente ya se marcó como leída automáticamente al cargar el chat
+        if (error.status === 404) {
+            console.log('ℹ️ Notificación ya marcada como leída por el sistema.');
+            return;
+        }
         console.error('Error marking notification as read:', error);
         showNotification('Error al marcar como leída', 'error');
     }
@@ -115,17 +120,24 @@ export async function openChatFromNotification(chatUuid) {
         const chatToLoad = chatsData.chats.find(c => c.uuid === chatUuid);
 
         if (chatToLoad) {
-            // Cambiar al panel de chats
-            document.querySelector('.menu-item[data-panel="chats-panel"]').click();
+            console.log('🎯 [UI DEBUG] Iniciando navegación desde notificación para chat:', chatUuid);
 
-            // Cargar el chat
+            // Asegurar que el sistema está en modo "app"
+            if (elements.appContainer) elements.appContainer.classList.remove('hidden');
+            if (elements.authScreen) elements.authScreen.classList.add('hidden');
+
+            // 1. Mostrar el panel de chat directamente (showPanel ya maneja el menú)
+            console.log('🔄 [UI DEBUG] Solicitando cambio a panel de chat...');
             loadChat(chatToLoad);
 
             // Marcar notificación como leída
-            const notificationElement = elements.notificationsList.querySelector(`[data-chat-uuid="${chatUuid}"]`);
+            const notificationElement = elements.notificationsList?.querySelector(`[data-chat-uuid="${chatUuid}"]`);
             if (notificationElement) {
-                const notificationId = notificationElement.closest('.notification-item').dataset.id;
-                markNotificationAsRead(notificationId);
+                const notificationId = notificationElement.closest('.notification-item')?.dataset.id;
+                if (notificationId) {
+                    console.log('✉️ [UI DEBUG] Marcando notificación como leída:', notificationId);
+                    markNotificationAsRead(notificationId);
+                }
             }
         } else {
             showNotification('Chat no encontrado', 'warning');

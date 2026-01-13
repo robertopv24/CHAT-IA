@@ -32,7 +32,7 @@ export {
     updateChatInList,
     renameChat,
     deleteChat
-} from './chatUI.js';
+} from './chat/chatUI.js';
 
 // Contacts UI
 export {
@@ -97,33 +97,33 @@ import {
 /**
  * Actualiza la información del perfil en la UI
  */
- export function updateProfileInfo() {
-     const state = stateManager.getState();
-     if (state.currentUser) {
-         // Actualizar nombre de usuario
-         if (elements.profileUsername) {
-             elements.profileUsername.textContent = state.currentUser.name || 'Usuario';
-         }
+export function updateProfileInfo() {
+    const state = stateManager.getState();
+    if (state.currentUser) {
+        // Actualizar nombre de usuario
+        if (elements.profileUsername) {
+            elements.profileUsername.textContent = state.currentUser.name || 'Usuario';
+        }
 
-         // Actualizar email
-         if (elements.profileEmail) {
-             elements.profileEmail.textContent = state.currentUser.email || 'usuario@ejemplo.com';
-         }
+        // Actualizar email
+        if (elements.profileEmail) {
+            elements.profileEmail.textContent = state.currentUser.email || 'usuario@ejemplo.com';
+        }
 
-         // CORREGIDO: Actualizar avatar del menú principal
-         const profileBtn = document.getElementById('profile-btn');
-         if (profileBtn) {
-             displayAvatar(profileBtn, state.currentUser.avatar_url, state.currentUser.name || 'Usuario');
-         }
+        // CORREGIDO: Actualizar avatar del menú principal
+        const profileBtn = document.getElementById('profile-btn');
+        if (profileBtn) {
+            displayAvatar(profileBtn, state.currentUser.avatar_url, state.currentUser.name || 'Usuario');
+        }
 
-         // CORREGIDO: Actualizar avatar grande del panel de perfil
-         const profileAvatar = document.querySelector('.user-avatar.large');
-         if (profileAvatar) {
-             displayAvatar(profileAvatar, state.currentUser.avatar_url, state.currentUser.name || 'Usuario');
-         }
+        // CORREGIDO: Actualizar avatar grande del panel de perfil
+        const profileAvatar = document.querySelector('.user-avatar.large');
+        if (profileAvatar) {
+            displayAvatar(profileAvatar, state.currentUser.avatar_url, state.currentUser.name || 'Usuario');
+        }
 
-         // CORREGIDO: Actualizar avatar en la cabecera del chat si es un chat con el usuario
-         const currentState = stateManager.getState();
+        // CORREGIDO: Actualizar avatar en la cabecera del chat si es un chat con el usuario
+        const currentState = stateManager.getState();
         if (currentState.currentChat && currentState.currentChat.chat_type !== 'ai') {
             const chatHeaderAvatar = document.querySelector('.chat-header .chat-avatar');
             if (chatHeaderAvatar) {
@@ -131,9 +131,9 @@ import {
                 // Por ahora usamos un placeholder
                 displayAvatar(chatHeaderAvatar, null, currentState.currentChat.title || 'Chat');
             }
-         }
-     }
- }
+        }
+    }
+}
 
 /**
  * Actualiza el estado de conexión en la UI

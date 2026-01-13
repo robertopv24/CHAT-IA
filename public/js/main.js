@@ -4,6 +4,7 @@ import { checkAuthStatus } from './auth.js';
 import { setupEventListeners } from './eventListeners/index.js';
 import { setWelcomeMessageTime } from './utils.js';
 import { EmojiService } from './emojiService.js';
+import { fetchCsrfToken } from './api.js';
 
 // Importar elements directamente
 import { elements } from './elements.js';
@@ -47,6 +48,9 @@ class AppInitializer {
 
     async initializeSecurity() {
         console.log('🛡️ Inicializando seguridad...');
+
+        // Obtener token CSRF
+        await fetchCsrfToken();
 
         // Verificar dependencias críticas de seguridad
         const securityDeps = {
@@ -94,10 +98,10 @@ class AppInitializer {
         // Configurar opciones globales de KaTeX
         window.katexRenderOptions = window.katexRenderOptions || {
             delimiters: [
-                {left: "$$", right: "$$", display: true},
-                {left: "$", right: "$", display: false},
-                {left: "\\(", right: "\\)", display: false},
-                {left: "\\[", right: "\\]", display: true}
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
             ],
             throwOnError: false
         };
@@ -111,7 +115,7 @@ class AppInitializer {
         // Inicializar estado mínimo necesario
         stateManager.update(state => {
             state.hostname = window.location.hostname;
-            state.apiBaseUrl = window.location.origin + '/public';
+            state.apiBaseUrl = window.location.origin; // ELIMINADO /public que causaba 404
             state.isLocalhost = this.isLocalhost();
         });
 
@@ -173,8 +177,8 @@ class AppInitializer {
 
     isLocalhost() {
         return window.location.hostname === 'localhost' ||
-               window.location.hostname === '127.0.0.1' ||
-               window.location.hostname === 'foxia.duckdns.org';
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname === 'foxia.duckdns.org';
     }
 
     handleInitializationError(error) {
@@ -217,7 +221,7 @@ class AppInitializer {
 
 // ========== INICIALIZACIÓN CONTROLADA ==========
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     'use strict';
 
     console.log('📄 DOM cargado, iniciando aplicación...');
@@ -292,11 +296,11 @@ if (state.isLocalhost) {
 }
 
 // Manejo de errores globales
-window.addEventListener('error', function(event) {
+window.addEventListener('error', function (event) {
     console.error('💥 Error global no capturado:', event.error);
 });
 
-window.addEventListener('unhandledrejection', function(event) {
+window.addEventListener('unhandledrejection', function (event) {
     console.error('💥 Promesa rechazada no capturada:', event.reason);
     event.preventDefault();
 });

@@ -122,14 +122,42 @@ export function showApp() {
 }
 
 export function showPanel(panelId) {
+    console.log(`🖥️ [UI DEBUG] Cambiando al panel: ${panelId}`);
+
+    // 1. Manejar paneles de contenido
     if (elements.contentPanels) {
         elements.contentPanels.forEach(panel => {
-            panel.classList.remove('active');
+            const id = panel.id;
+            if (id === panelId) {
+                panel.classList.add('active');
+                console.log(`✅ [UI DEBUG] Panel activado: ${id}`);
+            } else {
+                panel.classList.remove('active');
+            }
         });
+    } else {
+        console.warn('⚠️ [UI DEBUG] elements.contentPanels no está inicializado');
+        // Fallback si la cache falla
+        document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
+        const target = document.getElementById(panelId);
+        if (target) target.classList.add('active');
     }
 
-    const panel = document.getElementById(panelId);
-    if (panel) panel.classList.add('active');
+    // 2. Sincronizar menú lateral (Sidebar)
+    if (elements.menuItems) {
+        // Mapear el panel de chat al icono de chats
+        const menuPanelId = panelId === 'chat-panel' ? 'chats-panel' : panelId;
+
+        elements.menuItems.forEach(item => {
+            const itemPanelId = item.getAttribute('data-panel');
+            if (itemPanelId === menuPanelId) {
+                item.classList.add('active');
+                console.log(`📍 [UI DEBUG] Menú activado para: ${itemPanelId}`);
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
 }
 
 export function hideContextMenus() {

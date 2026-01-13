@@ -1,11 +1,12 @@
 // eventListeners/fileEventListeners.js - Listeners de archivos
 import stateManager from '../stateManager.js';
 import { showNotification } from '../utils.js';
-import { showFileUploadModal, hideFileUploadModal, handleFileUpload } from '../fileUploadUI.js';
+import { showFileUploadModal, hideFileUploadModal, handleFileUpload, setupFileUploadListeners } from '../fileUploadUI.js';
 
 export class FileEventListeners {
     static async setup() {
         await this.setupFileActionListeners();
+        setupFileUploadListeners(); // Inicializar listeners del modal
         console.log('✅ File event listeners configurados');
     }
 

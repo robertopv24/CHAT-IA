@@ -13,6 +13,7 @@ use Clue\React\Redis\Factory as RedisFactory;
 use React\EventLoop\Loop;
 use React\Socket\Server as ReactServer;
 use React\Socket\SecureServer;
+use Foxia\Config\Database;
 
 // ================================================
 // 🔥 CLASES AUXILIARES MEJORADAS
@@ -436,8 +437,10 @@ foreach ($requiredEnvVars as $var) {
 
 // Crear instancia del servidor de chat
 try {
-    $chatServer = new ChatServer();
-    echo "✅ Servidor de chat inicializado correctamente\n";
+    $database = new Database();
+    $db = $database->getConnection();
+    $chatServer = new ChatServer($db);
+    echo "✅ Servidor de chat inicializado con conexión a base de datos\n";
 } catch (\Exception $e) {
     echo "❌ Error inicializando servidor de chat: " . $e->getMessage() . "\n";
     exit(1);

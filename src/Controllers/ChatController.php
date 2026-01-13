@@ -23,13 +23,20 @@ class ChatController
         $this->db = $database->getConnection();
 
         // Inicializar cliente Redis para publicación en tiempo real
-        $this->redis = new RedisClient([
-            'scheme' => 'tcp',
-            'host'   => ConfigService::get('REDIS_HOST') ?? '127.0.0.1',
-            'port'   => ConfigService::get('REDIS_PORT') ?? 6379,
-            'password' => ConfigService::get('REDIS_PASSWORD') ?? null,
-            'database' => ConfigService::get('REDIS_DB') ?? 0,
-        ]);
+        try {
+            $this->redis = new RedisClient([
+                'scheme' => 'tcp',
+                'host'   => ConfigService::get('REDIS_HOST') ?? '127.0.0.1',
+                'port'   => ConfigService::get('REDIS_PORT') ?? 6379,
+                'password' => ConfigService::get('REDIS_PASSWORD') ?? null,
+                'database' => ConfigService::get('REDIS_DB') ?? 0,
+                // Timeout corto para no bloquear la subida
+                'timeout' => 1.0, 
+            ]);
+        } catch (Exception $e) {
+            error_log("⚠️ Error inicializando Redis: " . $e->getMessage());
+            $this->redis = null;
+        }
     }
 
     /**
@@ -378,15 +385,24 @@ class ChatController
      */
     public function uploadFile()
     {
+        error_log("🚀 [ChatController] Iniciando uploadFile");
+        
         header('Content-Type: application/json');
 
         if (!isset($GLOBALS['current_user'])) {
+            error_log("❌ [ChatController] Usuario no autenticado");
             http_response_code(401);
             echo json_encode(['error' => 'Usuario no autenticado']);
             return;
         }
 
         $currentUserId = $GLOBALS['current_user']->id;
+
+        // 🔓 Liberar sesión PHP para evitar bloqueos durante subidas largas
+        // Permite que el WebSocket reconecte mientras el archivo se procesa
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
 
         if (empty($_FILES) || !isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
             http_response_code(400);
@@ -524,7 +540,14 @@ class ChatController
                 'file_info' => $fileContent
             ];
 
-            $this->redis->publish('canal-chat', json_encode($redisPayload));
+            // 🛡️ Redis protegido: Publicar solo si está disponible y capturar errores
+            if ($this->redis) {
+                try {
+                    $this->redis->publish('canal-chat', json_encode($redisPayload));
+                } catch (Exception $e) {
+                    error_log("⚠️ Error publicando en Redis (uploadFile): " . $e->getMessage());
+                }
+            }
 
             $notificationContent = $this->getFileNotificationContent($messageType, $fileInfo['original_name']);
             $this->createEnhancedNotifications($chatId, $currentUserId, $notificationContent, $chatTitle, !empty($replyingToId), $replyingToMessage);
@@ -543,11 +566,14 @@ class ChatController
 
         } catch (PDOException $e) {
             $this->db->rollBack();
+            error_log("❌ [ChatController] PDOException: " . $e->getMessage());
             http_response_code(500);
             echo json_encode(['error' => 'Error en la base de datos: ' . $e->getMessage()]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $this->db->rollBack();
-            http_response_code(500);
+            error_log("❌ [ChatController] Throwable/Exception: " . $e->getMessage());
+            error_log("❌ [ChatController] Trace: " . $e->getTraceAsString());
+            http_response_code(500); 
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
@@ -599,6 +625,31 @@ class ChatController
                 http_response_code(403);
                 echo json_encode(['error' => 'No tienes permisos para enviar mensajes en este chat']);
                 return;
+            }
+
+            // --- VALIDACIÓN DE BLOQUEO DE CONTACTOS ---
+            if ($chat['chat_type'] === 'user_to_user') {
+                $stmt = $this->db->prepare("
+                    SELECT cp.user_id
+                    FROM chat_participants cp
+                    WHERE cp.chat_id = :chat_id AND cp.user_id != :sender_id
+                ");
+                $stmt->execute([':chat_id' => $chat['id'], ':sender_id' => $currentUserId]);
+                $otherParticipant = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($otherParticipant) {
+                    $otherId = $otherParticipant['user_id'];
+                    $stmt = $this->db->prepare("
+                        SELECT 1 FROM user_contacts
+                        WHERE user_id = :recipient_id AND contact_id = :sender_id AND is_blocked = 1
+                    ");
+                    $stmt->execute([':recipient_id' => $otherId, ':sender_id' => $currentUserId]);
+                    if ($stmt->fetch()) {
+                        http_response_code(403);
+                        echo json_encode(['error' => 'No puedes enviar mensajes a este usuario porque te ha bloqueado']);
+                        return;
+                    }
+                }
             }
 
             $chatId = $chat['id'];
@@ -676,7 +727,14 @@ class ChatController
                     'replied_author_name' => $fullMessage['replied_author_name'] ?? null
                 ];
 
-                $this->redis->publish('canal-chat', json_encode($redisPayload));
+                // 🛡️ Redis protegido: Publicar solo si está disponible y capturar errores
+                if ($this->redis) {
+                    try {
+                        $this->redis->publish('canal-chat', json_encode($redisPayload));
+                    } catch (Exception $e) {
+                        error_log("⚠️ Error publicando en Redis (sendMessage): " . $e->getMessage());
+                    }
+                }
             }
 
             // Crear notificaciones para otros usuarios
@@ -740,14 +798,17 @@ class ChatController
                             c.created_at,
                             c.last_message_at,
                             (SELECT content FROM messages WHERE chat_id = c.id AND deleted = 0 ORDER BY created_at DESC LIMIT 1) as last_message_content,
-                            (SELECT COUNT(*) FROM messages m WHERE m.chat_id = c.id AND m.deleted = 0 AND m.user_id != :user_id AND m.created_at > COALESCE((SELECT last_read FROM chat_participants WHERE chat_id = c.id AND user_id = :user_id), '2000-01-01')) as unread_count
+                            (SELECT COUNT(*) FROM notifications n WHERE n.related_chat_id = c.id AND n.user_id = :user_id_notif AND n.is_read = FALSE) as unread_count
                         FROM chats c
                         JOIN chat_participants cp ON c.id = cp.chat_id
-                        WHERE cp.user_id = :user_id
+                        WHERE cp.user_id = :user_id_cp
                         ORDER BY COALESCE(c.last_message_at, c.created_at) DESC";
 
             $stmtChats = $this->db->prepare($queryChats);
-            $stmtChats->execute([':user_id' => $currentUserId]);
+            $stmtChats->execute([
+                ':user_id_notif' => $currentUserId,
+                ':user_id_cp' => $currentUserId
+            ]);
             $chats = $stmtChats->fetchAll(PDO::FETCH_ASSOC);
 
             if (empty($chats)) {
@@ -876,9 +937,9 @@ class ChatController
 
             $chatId = $chat['id'];
 
-            // Actualizar último tiempo de lectura
-            $updateReadQuery = "UPDATE chat_participants SET last_read = NOW()
-                               WHERE chat_id = :chat_id AND user_id = :user_id";
+            // Marcar notificaciones del chat como leídas
+            $updateReadQuery = "UPDATE notifications SET is_read = TRUE
+                               WHERE related_chat_id = :chat_id AND user_id = :user_id AND is_read = FALSE";
             $stmt = $this->db->prepare($updateReadQuery);
             $stmt->execute([':chat_id' => $chatId, ':user_id' => $currentUserId]);
 

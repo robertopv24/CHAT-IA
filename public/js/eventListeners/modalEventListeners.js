@@ -2,7 +2,7 @@
 import stateManager from '../stateManager.js';
 import { apiCall } from '../api.js';
 import { showNotification, hideContextMenus } from '../utils.js';
-import { renameChat, deleteChat } from '../chatUI.js';
+import { renameChat, deleteChat } from '../chat/chatUI.js';
 import { showRenameModal, hideRenameModal } from '../modals.js';
 
 // Variables locales para contexto temporal
@@ -104,9 +104,9 @@ export class ModalEventListeners {
 
     // ========== HANDLERS GLOBALES ==========
 
-    static handleGlobalKeydown = (e) => {
+    static handleGlobalKeydown = async (e) => {
         if (e.key === 'Escape') {
-            const { elements } = require('../elements.js');
+            const { elements } = await import('../elements.js');
 
             if (!elements.renameModal.classList.contains('hidden')) {
                 hideRenameModal();

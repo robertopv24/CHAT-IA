@@ -14,6 +14,20 @@ const API_CONFIG = {
 
 // Cache mejorado con límites
 const requestCache = new Map();
+let csrfToken = null;
+
+export async function fetchCsrfToken() {
+    try {
+        const response = await fetch('/api/auth/csrf-token');
+        const data = await response.json();
+        if (data.csrf_token) {
+            csrfToken = data.csrf_token;
+            console.log('🛡️ Token CSRF obtenido correctamente');
+        }
+    } catch (error) {
+        console.warn('⚠️ Error obteniendo token CSRF:', error);
+    }
+}
 
 export function getCookie(name) {
     const value = `; ${document.cookie}`;
@@ -59,12 +73,15 @@ export async function apiCall(endpoint, options = {}) {
 
         return result;
     } catch (error) {
-        // ✅ CORRECCIÓN: Usar manejador unificado de errores
-        ErrorHandler.handle(error, 'api_call', {
-            endpoint,
-            method: config.method,
-            url
-        });
+        // ✅ CORRECCIÓN: Permitir silenciar logs automáticos
+        if (!options.silent) {
+            ErrorHandler.handle(error, 'api_call', {
+                endpoint,
+                method: config.method,
+                url,
+                silent: options.silent
+            });
+        }
         throw error;
     }
 }
@@ -89,6 +106,11 @@ function buildRequestConfig(options) {
     const token = getCookie('auth_token');
     if (token) {
         config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Agregar token CSRF
+    if (csrfToken) {
+        config.headers['X-CSRF-TOKEN'] = csrfToken;
     }
 
     // Serializar body si es objeto (no FormData)
@@ -205,7 +227,7 @@ function generateCacheKey(url, body) {
  */
 function shouldRetry(error) {
     return error.name === 'AbortError' ||
-           (error.name === 'TypeError' && error.message.includes('fetch'));
+        (error.name === 'TypeError' && error.message.includes('fetch'));
 }
 
 function createAPIError(error) {

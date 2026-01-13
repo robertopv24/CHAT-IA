@@ -117,12 +117,24 @@ export class EmojiService {
         }
 
         try {
+            console.log('🔓 Intentando abrir picker de emojis...');
             this.isOpen = true;
-            elements.emojiPickerContainer.classList.remove('hidden');
 
-            this.positionPicker();
+            if (elements.emojiPickerContainer) {
+                elements.emojiPickerContainer.classList.remove('hidden');
+                console.log('✅ Clase hidden eliminada del contenedor');
+                console.log('📊 Estado del contenedor:', {
+                    display: window.getComputedStyle(elements.emojiPickerContainer).display,
+                    zIndex: window.getComputedStyle(elements.emojiPickerContainer).zIndex,
+                    bottom: window.getComputedStyle(elements.emojiPickerContainer).bottom
+                });
+            } else {
+                console.error('❌ elements.emojiPickerContainer no existe en el momento de abrir');
+            }
 
-            console.log('🎨 Picker de emojis abierto');
+            // this.positionPicker(); // Desactivado para permitir que mande el CSS
+
+            console.log('🎨 Picker de emojis abierto correctamente');
 
         } catch (error) {
             console.error('❌ Error abriendo picker de emojis:', error);
