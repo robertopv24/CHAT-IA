@@ -7,7 +7,7 @@ import { EmojiService } from './emojiService.js';
 import { fetchCsrfToken } from './api.js';
 
 // Importar elements directamente
-import { elements } from './elements.js';
+import { elements, initializeDynamicElements } from './elements.js';
 
 class AppInitializer {
     constructor() {
@@ -152,6 +152,9 @@ class AppInitializer {
                 console.warn('⚠️ Elementos críticos faltantes:', missingElements);
                 // No lanzar error, continuar con los elementos disponibles
             }
+
+            // Inicializar elementos dinámicos antes de configurar listeners
+            initializeDynamicElements();
 
             // Configurar UI básica
             setWelcomeMessageTime();

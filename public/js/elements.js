@@ -32,6 +32,7 @@ export const elements = {
     newChatBtn: document.getElementById('new-chat-btn'),
     newChatMenu: document.getElementById('new-chat-menu'),
     createAiChatBtn: document.getElementById('create-ai-chat-btn'),
+    createGroupChatBtn: document.getElementById('create-group-chat-btn'),
     messageContactBtn: document.getElementById('message-contact-btn'),
 
     // Panel de chat
@@ -96,19 +97,19 @@ export const elements = {
     nicknameCancelBtn: document.getElementById('nickname-cancel'),
 
 
-        // File Upload
-        fileUploadModal: document.getElementById('file-upload-modal'),
-        fileUpload: document.getElementById('file-upload'),
-        fileUploadList: document.getElementById('file-upload-list'),
-        fileUploadConfirm: document.getElementById('file-upload-confirm'),
-        fileUploadCancel: document.getElementById('file-upload-cancel'),
+    // File Upload
+    fileUploadModal: document.getElementById('file-upload-modal'),
+    fileUpload: document.getElementById('file-upload'),
+    fileUploadList: document.getElementById('file-upload-list'),
+    fileUploadConfirm: document.getElementById('file-upload-confirm'),
+    fileUploadCancel: document.getElementById('file-upload-cancel'),
 
-        // Avatar Upload
-        avatarUploadModal: null, // Se creará dinámicamente
-        avatarUploadInput: null,
-        avatarPreview: null,
-        avatarUploadCancel: null,
-        avatarUploadConfirm: null,
+    // Avatar Upload
+    avatarUploadModal: null, // Se creará dinámicamente
+    avatarUploadInput: null,
+    avatarPreview: null,
+    avatarUploadCancel: null,
+    avatarUploadConfirm: null,
 
 
     messageSearchModal: document.getElementById('message-search-modal'),
@@ -134,7 +135,15 @@ export const elements = {
     tripletPredicate: document.getElementById('triplet-predicate'),
     tripletObject: document.getElementById('triplet-object'),
     tripletCancel: document.getElementById('triplet-cancel'),
-    tripletConfirm: document.getElementById('triplet-confirm')
+    tripletConfirm: document.getElementById('triplet-confirm'),
+
+    // Grupos
+    groupCreateModal: document.getElementById('group-create-modal'),
+    groupNameInput: document.getElementById('group-name-input'),
+    groupContactSearch: document.getElementById('group-contact-search'),
+    groupParticipantsList: document.getElementById('group-participants-list'),
+    groupCreateConfirmBtn: document.getElementById('group-create-confirm'),
+    groupCreateCancelBtn: document.getElementById('group-create-cancel')
 };
 
 // Función para verificar que los elementos críticos existen
@@ -158,8 +167,24 @@ export function validateCriticalElements() {
 export function initializeDynamicElements() {
     // Elementos que pueden ser creados dinámicamente
     elements.menuItems = document.querySelectorAll('.menu-item');
-    elements.contentPanels = document.querySelectorAll('.content-panel');
     elements.emojiPicker = document.querySelector('emoji-picker');
+
+    // Botón y menú de nuevo chat
+    elements.newChatBtn = document.getElementById('new-chat-btn');
+    elements.newChatMenu = document.getElementById('new-chat-menu');
+
+    // Elementos del menú de nuevo chat
+    elements.createAiChatBtn = document.getElementById('create-ai-chat-btn');
+    elements.createGroupChatBtn = document.getElementById('create-group-chat-btn');
+    elements.messageContactBtn = document.getElementById('message-contact-btn');
+
+    // Modales de grupos
+    elements.groupCreateModal = document.getElementById('group-create-modal');
+    elements.groupNameInput = document.getElementById('group-name-input');
+    elements.groupContactSearch = document.getElementById('group-contact-search');
+    elements.groupParticipantsList = document.getElementById('group-participants-list');
+    elements.groupCreateConfirmBtn = document.getElementById('group-create-confirm');
+    elements.groupCreateCancelBtn = document.getElementById('group-create-cancel');
 
     console.log('✅ Elementos dinámicos inicializados');
 }

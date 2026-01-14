@@ -9,20 +9,18 @@ import stateManager from '../stateManager.js';
 import { initializeContactsSystem } from '../contactsUI.js';
 import { setupAvatarUploadListeners } from '../avatarUI.js';
 
-export function setupEventListeners() {
+export async function setupEventListeners() {
     console.log('🔧 Configurando todos los event listeners...');
 
     // Configurar listeners en orden de dependencias
-    AuthEventListeners.setup();
-    ChatEventListeners.setup();
-    ContactEventListeners.setup();
-    ModalEventListeners.setup();
-    FileEventListeners.setup();
+    await AuthEventListeners.setup();
+    await ChatEventListeners.setup();
+    await ContactEventListeners.setup();
+    await ModalEventListeners.setup();
+    await FileEventListeners.setup();
 
     // Configurar listeners globales
     setupGlobalListeners();
-
-    // Inicializar subsistemas UI
     initializeContactsSystem();
     setupAvatarUploadListeners();
 
@@ -39,9 +37,6 @@ function setupGlobalListeners() {
     // Cerrar menús al hacer clic fuera
     document.addEventListener('click', handleGlobalClick);
 
-    // Ping periódico para WebSocket
-    setupWebSocketPing();
-
     // Actualización periódica de notificaciones
     setupPeriodicUpdates();
 }
@@ -57,38 +52,22 @@ function handleGlobalClick(event) {
         }
 
         // Cerrar menús contextuales
-        if (elements.contextMenu && !elements.contextMenu.classList.contains('hidden') &&
-            !elements.contextMenu.contains(event.target)) {
-            elements.contextMenu.classList.add('hidden');
-        }
+        const closeMenu = (menu) => {
+            if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        };
 
-        if (elements.contactContextMenu && !elements.contactContextMenu.classList.contains('hidden') &&
-            !elements.contactContextMenu.contains(event.target)) {
-            elements.contactContextMenu.classList.add('hidden');
-        }
+        closeMenu(elements.contextMenu);
+        closeMenu(elements.contactContextMenu);
+        closeMenu(elements.messageContextMenu);
 
-        if (elements.messageContextMenu && !elements.messageContextMenu.classList.contains('hidden') &&
-            !elements.messageContextMenu.contains(event.target)) {
-            elements.messageContextMenu.classList.add('hidden');
-        }
-
-        // Cerrar todos los context menus
+        // Cerrar todos los context menus si el clic no es parte de uno
         if (!event.target.closest('.context-menu') &&
             !event.target.closest('[data-context-menu]')) {
-            hideContextMenus();
+            import('../utils.js').then(({ hideContextMenus }) => hideContextMenus());
         }
     });
-}
-
-function setupWebSocketPing() {
-    // Enviar ping periódico para mantener conexión WebSocket
-    setInterval(() => {
-        const state = stateManager.getState();
-        if (state.isWebSocketConnected && state.websocket &&
-            state.websocket.readyState === WebSocket.OPEN) {
-            state.websocket.send(JSON.stringify({ type: 'ping' }));
-        }
-    }, 30000); // Cada 30 segundos
 }
 
 function setupPeriodicUpdates() {
@@ -109,7 +88,7 @@ window.addEventListener('focus', function () {
     if (state.isAuthenticated && !state.isWebSocketConnected) {
         console.log('🔍 Página en foco - Reconectando WebSocket...');
         import('../websocket.js').then(({ connectWebSocket }) => {
-            connectWebSocket();
+            connectWebSocket().catch(err => console.warn('⚠️ Falló reconexión automática en foco:', err.message));
         });
     }
 });

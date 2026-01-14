@@ -5,11 +5,11 @@ import ErrorHandler from './errorHandler.js';
 
 // Configuración centralizada
 const API_CONFIG = {
-    DEFAULT_TIMEOUT: 15000,
+    DEFAULT_TIMEOUT: 30000, // Aumentado a 30s para redes lentas
     MAX_RETRIES: 2,
-    RETRY_DELAY: 1000,
+    RETRY_DELAY: 1500,
     MAX_CACHE_SIZE: 50,
-    CACHE_DURATION: 1000
+    CACHE_DURATION: 3000 // Aumentado a 3s
 };
 
 // Cache mejorado con límites
@@ -190,7 +190,7 @@ function getCachedResponse(url, body) {
     const cached = requestCache.get(cacheKey);
 
     if (cached && Date.now() - cached.timestamp < API_CONFIG.CACHE_DURATION) {
-        console.log('📦 Cache hit:', url);
+        // Log silenciado para reducir ruido
         return cached.data;
     }
 
@@ -214,7 +214,6 @@ function cacheResponse(url, body, data) {
     if (requestCache.size > API_CONFIG.MAX_CACHE_SIZE) {
         const firstKey = requestCache.keys().next().value;
         requestCache.delete(firstKey);
-        console.log('🧹 Cache limpiado (límite excedido)');
     }
 }
 
@@ -452,6 +451,6 @@ setInterval(() => {
     }
 
     if (cleaned > 0) {
-        console.log(`🧹 Limpiados ${cleaned} entradas de cache expiradas`);
+        // Log silenciado
     }
 }, API_CONFIG.CACHE_DURATION * 5);

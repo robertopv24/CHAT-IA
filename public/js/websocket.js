@@ -8,7 +8,8 @@ import ErrorHandler from './errorHandler.js';
 
 let webSocketManager = null;
 // CORRECCIÓN: Estado unificado de conexión
-let connectionState = 'disconnected'; // 'disconnected', 'connecting', 'connected', 'authenticated', 'reconnecting'
+let connectionState = 'disconnected';
+let subscriptionQueue = new Set(); // Cola de suscripciones pendientes
 
 /**
  * Inicializa y conecta el WebSocketManager de forma controlada
@@ -123,12 +124,13 @@ function setupWebSocketHandlers() {
     webSocketManager.onMessage('new_message', handleNewMessage);
     webSocketManager.onMessage('new_notification', handleNewNotification);
     webSocketManager.onMessage('chat_notification', handleChatNotification);
+    webSocketManager.onMessage('new_chat', handleNewChat);
     webSocketManager.onMessage('pong', handlePong);
     webSocketManager.onMessage('error', handleWebSocketError);
 
     // Handler global para logging
     webSocketManager.onMessage('*', (data) => {
-        if (!['pong'].includes(data.type)) {
+        if (!['pong', 'ping'].includes(data.type)) {
             console.log('📨 Mensaje WebSocket recibido:', data);
         }
     });
@@ -144,7 +146,7 @@ function setupWebSocketHandlers() {
  * Maneja la apertura exitosa de la conexión
  */
 function handleWebSocketOpen(event) {
-    console.log('⚡ [WS DEBUG] Conexión física establecida. Iniciando autenticación...');
+    // console.log('⚡ [WS DEBUG] Conexión física establecida. Iniciando autenticación...');
 
     connectionState = 'connected';
     stateManager.setWebSocketState(true, webSocketManager.ws);
@@ -191,7 +193,7 @@ function authenticateWebSocket() {
  * Maneja éxito de autenticación
  */
 function handleAuthSuccess(data) {
-    console.log('✅ [WS DEBUG] Autenticación WebSocket exitosa confirmada por servidor');
+    // console.log('✅ [WS DEBUG] Autenticación WebSocket exitosa confirmada por servidor');
     connectionState = 'authenticated';
 
     if (document.getElementById('connection-status')) {
@@ -199,7 +201,16 @@ function handleAuthSuccess(data) {
         document.getElementById('connection-status').style.color = 'var(--success)';
     }
 
-    showNotification('Conexión en tiempo real activada', 'success');
+    showNotification('Conexión en tiempo real activa', 'success');
+
+    // Procesar cola de suscripciones pendientes
+    if (subscriptionQueue.size > 0) {
+        console.log(`📡 [WS] Procesando cola de ${subscriptionQueue.size} suscripciones...`);
+        subscriptionQueue.forEach(uuid => {
+            subscribeToChat(uuid);
+        });
+        subscriptionQueue.clear();
+    }
 
     // Suscribirse a chats que ya están en el DOM
     const chatUuids = Array.from(document.querySelectorAll('.chat-item'))
@@ -235,7 +246,7 @@ function handleAuthError(data) {
  * Maneja nuevo mensaje
  */
 function handleNewMessage(data) {
-    console.log('💬 [WS DEBUG] Nuevo mensaje recibido:', data);
+    // console.log('💬 [WS DEBUG] Nuevo mensaje recibido:', data);
 
     const messageChatUuid = data.chat_uuid;
     const state = stateManager.getState();
@@ -319,6 +330,30 @@ function handleChatNotification(data) {
 }
 
 /**
+ * Maneja el evento de nuevo chat creado (Real-time sync)
+ */
+async function handleNewChat(data) {
+    console.log('🆕 Nuevo chat detectado via WebSocket:', data);
+
+    const state = stateManager.getState();
+    const isCreator = state.currentUser && data.creator_id == state.currentUser.id;
+
+    // Recargar la lista de chats para todos los participantes
+    await fetchChats();
+
+    // Si no soy el creador, mostrar una notificación
+    if (!isCreator) {
+        const title = data.title || (data.chat_type === 'ai' ? 'Asistente IA' : 'Nueva conversación');
+        showNotification(`🆕 Te han agregado a un nuevo chat: ${title}`, 'success');
+    }
+
+    // Suscribirse automáticamente al nuevo UUID para recibir mensajes
+    if (data.chat_uuid) {
+        subscribeToChat(data.chat_uuid);
+    }
+}
+
+/**
  * Maneja respuesta de ping
  */
 function handlePong(data) {
@@ -356,37 +391,24 @@ function handleWebSocketClose(event) {
         document.getElementById('connection-status').style.color = 'var(--danger)';
     }
 
-    // No reconectar para cierres limpios (código 1000)
-    if (event.code === 1000) {
-        console.log('🔌 Cierre limpio del WebSocket');
-        return;
+    if (document.getElementById('connection-status')) {
+        document.getElementById('connection-status').textContent = 'Desconectado';
+        document.getElementById('connection-status').style.color = 'var(--danger)';
     }
 
-    // Reconectar automáticamente para otros cierres
-    console.log('🔄 Intentando reconexión automática...');
-    connectionState = 'reconnecting';
-
-    setTimeout(() => {
-        if (connectionState === 'reconnecting') {
-            connectWebSocket().catch(error => {
-                console.error('❌ Reconexión automática fallida:', error);
-            });
-        }
-    }, 3000);
+    // No reconectar manualmente, el WebSocketManager ya tiene su propio sistema de reintentos
+    // handleWebSocketClose se llama como notificación del cierre que el Manager ya está gestionando.
 }
 
 /**
  * Suscribe a un chat específico
  */
 export function subscribeToChat(chatUuid) {
-    if (!webSocketManager || !chatUuid) return;
+    if (!chatUuid) return;
 
     if (connectionState !== 'authenticated') {
-        console.warn(`⏳ [WS DEBUG] Postponiendo suscripción a ${chatUuid}: Esperando autenticación...`);
-        // Si ya estamos conectados pero no autenticados, reintentar en un momento
-        if (connectionState === 'connected') {
-            setTimeout(() => subscribeToChat(chatUuid), 500);
-        }
+        console.log(`⏳ [WS] Guardando suscripción en cola para ${chatUuid} (esperando autenticación)`);
+        subscriptionQueue.add(chatUuid);
         return;
     }
 
@@ -395,11 +417,10 @@ export function subscribeToChat(chatUuid) {
         chat_uuid: chatUuid
     };
 
-    if (webSocketManager.send(subscribeMessage)) {
-        console.log(`📡 [WS DEBUG] Suscripción enviada para chat: ${chatUuid}`);
+    if (webSocketManager && webSocketManager.send(subscribeMessage)) {
+        // Log silenciado para no saturar
     } else {
-        console.error(`❌ No se pudo suscribir al chat: ${chatUuid}`);
-        ErrorHandler.handleNetworkError('websocket_subscribe');
+        console.error(`❌ No se pudo enviar suscripción para chat: ${chatUuid}`);
     }
 }
 

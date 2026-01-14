@@ -119,7 +119,7 @@ class AppState {
     }
 
     setCurrentChat(chat) {
-        console.log('📍 [STATE DEBUG] Estableciendo chat actual:', chat ? chat.uuid : 'null');
+        // console.log('📍 [STATE DEBUG] Estableciendo chat actual:', chat ? chat.uuid : 'null');
         this.update(state => {
             state.currentChat = chat;
         });

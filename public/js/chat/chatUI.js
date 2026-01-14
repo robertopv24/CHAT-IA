@@ -74,7 +74,7 @@ function updateUnreadCounts(chats) {
  * Carga un chat específico
  */
 export function loadChat(chat) {
-    console.log('📂 [UI DEBUG] Cargando chat:', chat ? chat.uuid : 'null', chat);
+    // console.log('📂 [UI DEBUG] Cargando chat:', chat ? chat.uuid : 'null', chat);
 
     // Actualizar estado usando el método específico para diagnóstico
     stateManager.setCurrentChat(chat);
@@ -199,7 +199,7 @@ export function renderMessages(messages) {
  * Agrega un mensaje al chat
  */
 export function addMessageToChat(message, isReply = false, replyingTo = null) {
-    console.log('🖥️ [UI DEBUG] Intentando añadir mensaje al chat:', message.uuid);
+    // console.log('🖥️ [UI DEBUG] Intentando añadir mensaje al chat:', message.uuid);
     if (!elements.messagesContainer) {
         console.error('❌ [UI DEBUG] No se encontró elements.messagesContainer!');
         return;
@@ -216,7 +216,7 @@ export function addMessageToChat(message, isReply = false, replyingTo = null) {
     removeDuplicateMessage(message.uuid);
 
     // Renderizar mensaje
-    console.log('🎨 [UI DEBUG] Renderizando mensaje con MessageRenderer...', { message, isReply, replyingTo });
+    // console.log('🎨 [UI DEBUG] Renderizando mensaje con MessageRenderer...', { message, isReply, replyingTo });
     const messageElement = MessageRenderer.renderMessage(message, isReply, replyingTo);
 
     if (!messageElement) {
@@ -303,17 +303,21 @@ export async function createAIChat() {
             }
         });
 
-        showNotification('Nuevo chat con IA creado', 'success');
+        const notificationMessage = response.created
+            ? 'Nuevo chat con IA creado'
+            : 'Abriendo chat con IA existente';
+
+        showNotification(notificationMessage, 'success');
 
         // Recargar lista de chats
         await fetchChats();
 
-        // Cargar el chat recién creado
+        // Cargar el chat
         if (response.chat_uuid) {
             const chatsData = await apiCall('/api/chat/list');
-            const newChat = chatsData.chats.find(chat => chat.uuid === response.chat_uuid);
-            if (newChat) {
-                loadChat(newChat);
+            const targetChat = chatsData.chats.find(chat => chat.uuid === response.chat_uuid);
+            if (targetChat) {
+                loadChat(targetChat);
             }
         }
 
@@ -321,6 +325,46 @@ export async function createAIChat() {
     } catch (error) {
         console.error('Error creating AI chat:', error);
         showNotification('Error al crear chat con IA: ' + error.message, 'error');
+        return null;
+    }
+}
+
+/**
+ * Crea un nuevo chat grupal
+ */
+export async function createGroupChat(title, participantUuids) {
+    try {
+        const response = await apiCall('/api/chat/create', {
+            method: 'POST',
+            body: {
+                chat_type: 'group',
+                title: title,
+                participant_uuids: participantUuids
+            }
+        });
+
+        const notificationMessage = response.created
+            ? 'Grupo creado exitosamente'
+            : 'Abriendo grupo existente';
+
+        showNotification(notificationMessage, 'success');
+
+        // Recargar lista de chats
+        await fetchChats();
+
+        // Cargar el chat
+        if (response.chat_uuid) {
+            const chatsData = await apiCall('/api/chat/list');
+            const targetChat = chatsData.chats.find(chat => chat.uuid === response.chat_uuid);
+            if (targetChat) {
+                loadChat(targetChat);
+            }
+        }
+
+        return response.chat_uuid;
+    } catch (error) {
+        console.error('Error creating group chat:', error);
+        showNotification('Error al crear el grupo: ' + error.message, 'error');
         return null;
     }
 }

@@ -33,6 +33,7 @@ export class ChatManager {
         chatElement.dataset.uuid = chat.uuid;
 
         const isAiChat = chat.chat_type === 'ai';
+        const isGroup = chat.chat_type === 'group' || chat.is_group == 1;
         const chatTitle = chat.title || (isAiChat ? 'Chat con IA' : 'Chat');
         const lastMessage = chat.last_message_content || '';
         const time = formatDate(chat.last_message_at || chat.created_at);
@@ -53,7 +54,7 @@ export class ChatManager {
         chatElement.querySelector('.chat-time').textContent = time;
 
         // Configurar avatar
-        this.setupChatAvatar(chatElement, chat, isAiChat, chatTitle);
+        this.setupChatAvatar(chatElement, chat, isAiChat, isGroup, chatTitle);
 
         // Agregar event listeners
         this.setupChatEventListeners(chatElement, chat);
@@ -64,12 +65,16 @@ export class ChatManager {
     /**
      * Configura el avatar del chat
      */
-    static setupChatAvatar(chatElement, chat, isAiChat, chatTitle) {
+    static setupChatAvatar(chatElement, chat, isAiChat, isGroup, chatTitle) {
         const avatarElement = chatElement.querySelector('.chat-avatar');
         if (!avatarElement) return;
 
         if (isAiChat) {
             avatarElement.innerHTML = '<i class="fas fa-robot" style="color: var(--accent);"></i>';
+            avatarElement.style.backgroundImage = '';
+            avatarElement.style.backgroundColor = 'transparent';
+        } else if (isGroup && (!chat.avatar_url || chat.avatar_url.includes('group-avatar.png'))) {
+            avatarElement.innerHTML = '<i class="fas fa-users" style="color: var(--accent);"></i>';
             avatarElement.style.backgroundImage = '';
             avatarElement.style.backgroundColor = 'transparent';
         } else {

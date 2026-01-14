@@ -62,32 +62,69 @@ class ChatController
         }
 
         $chatType = strip_tags($input['chat_type']);
-        $participantUuids = $input['participant_uuids'] ?? [];
-        $title = isset($input['title']) ? htmlspecialchars($input['title'], ENT_QUOTES, 'UTF-8') : null;
+    $participantUuids = $input['participant_uuids'] ?? [];
+    $title = isset($input['title']) ? htmlspecialchars($input['title'], ENT_QUOTES, 'UTF-8') : null;
 
-        if (!in_array($chatType, ['ai', 'user_to_user'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'chat_type debe ser "ai" o "user_to_user"']);
-            return;
-        }
+    if (!in_array($chatType, ['ai', 'user_to_user', 'group'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'chat_type debe ser "ai", "user_to_user" o "group"']);
+        return;
+    }
 
-        if ($chatType === 'user_to_user' && empty($participantUuids)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Se requieren participant_uuids para chats user_to_user']);
-            return;
-        }
+    if ($chatType === 'group' && empty($title)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Los chats grupales requieren un título']);
+        return;
+    }
+
+    if (in_array($chatType, ['user_to_user', 'group']) && empty($participantUuids)) {
+        http_response_code(400);
+        echo json_encode(['error' => "Se requieren participant_uuids para chats $chatType"]);
+        return;
+    }
 
         try {
             $this->db->beginTransaction();
 
+            $chatUuid = null;
+            $chatId = null;
+            $isGroup = ($chatType === 'group' || ($chatType === 'user_to_user' && count($participantUuids) > 1));
+
+            // 1. DEDUPLICACIÓN PARA AI e INDIVIDUALES
+            if ($chatType === 'ai') {
+                $checkAiQuery = "SELECT uuid, id FROM chats WHERE chat_type = 'ai' AND created_by = :user_id LIMIT 1";
+                $stmt = $this->db->prepare($checkAiQuery);
+                $stmt->execute([':user_id' => $currentUserId]);
+                $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($existing) {
+                    $this->db->rollBack();
+                    echo json_encode(['message' => 'Chat IA existente', 'chat_uuid' => $existing['uuid'], 'chat_id' => $existing['id'], 'chat_type' => 'ai', 'is_group' => false, 'created' => false]);
+                    return;
+                }
+            } elseif ($chatType === 'user_to_user' && count($participantUuids) === 1) {
+                // Si es individual, redirigir a lógica findOrCreate (o similar)
+                $participantId = $this->getUserIdByUuid($participantUuids[0]);
+                if ($participantId) {
+                    $findChatQuery = "SELECT c.uuid, c.id FROM chats c 
+                                    JOIN chat_participants cp1 ON c.id = cp1.chat_id 
+                                    JOIN chat_participants cp2 ON c.id = cp2.chat_id 
+                                    WHERE c.chat_type = 'user_to_user' AND c.is_group = FALSE 
+                                    AND cp1.user_id = :u1 AND cp2.user_id = :u2 LIMIT 1";
+                    $stmt = $this->db->prepare($findChatQuery);
+                    $stmt->execute([':u1' => $currentUserId, ':u2' => $participantId]);
+                    $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+                    if ($existing) {
+                        $this->db->rollBack();
+                        echo json_encode(['message' => 'Chat existente encontrado', 'chat_uuid' => $existing['uuid'], 'chat_id' => $existing['id'], 'chat_type' => 'user_to_user', 'is_group' => false, 'created' => false]);
+                        return;
+                    }
+                }
+            }
+
+            // 2. CREACIÓN DEL CHAT
             $chatUuid = $this->generateUuid();
-
-            // CORRECCIÓN: Incluir is_group basado en el tipo de chat
-            $isGroup = ($chatType === 'user_to_user' && count($participantUuids) > 1);
-
-            $insertChatQuery = "INSERT INTO chats (uuid, chat_type, title, created_by, is_group)
+            $insertChatQuery = "INSERT INTO chats (uuid, chat_type, title, created_by, is_group) 
                                VALUES (:uuid, :chat_type, :title, :created_by, :is_group)";
-
             $stmt = $this->db->prepare($insertChatQuery);
             $stmt->execute([
                 ':uuid' => $chatUuid,
@@ -96,24 +133,26 @@ class ChatController
                 ':created_by' => $currentUserId,
                 ':is_group' => $isGroup
             ]);
-
             $chatId = $this->db->lastInsertId();
 
-            // Agregar al creador como participante
+            // 3. AGREGAR PARTICIPANTES
             $this->addParticipant($chatId, $currentUserId, true);
+            $participantIds = [$currentUserId];
 
-            if ($chatType === 'user_to_user') {
-                foreach ($participantUuids as $participantUuid) {
-                    $participantId = $this->getUserIdByUuid($participantUuid);
-                    if ($participantId) {
-                        $this->addParticipant($chatId, $participantId);
-                    } else {
-                        throw new Exception("Usuario con UUID $participantUuid no encontrado");
+            if ($chatType !== 'ai') {
+                foreach ($participantUuids as $pUuid) {
+                    $pId = $this->getUserIdByUuid($pUuid);
+                    if ($pId) {
+                        $this->addParticipant($chatId, $pId);
+                        $participantIds[] = (int)$pId;
                     }
                 }
             }
 
             $this->db->commit();
+
+            // 4. NOTIFICACIÓN EN TIEMPO REAL (REDIS)
+            $this->publishNewChatEvent($chatUuid, $chatType, $title, $participantIds);
 
             http_response_code(201);
             echo json_encode([
@@ -121,8 +160,11 @@ class ChatController
                 'chat_uuid' => $chatUuid,
                 'chat_id' => $chatId,
                 'chat_type' => $chatType,
-                'is_group' => $isGroup
+                'is_group' => $isGroup,
+                'created' => true
             ]);
+
+        } catch (PDOException $e) {
 
         } catch (PDOException $e) {
             $this->db->rollBack();
@@ -183,49 +225,56 @@ class ChatController
             $existingChat = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($existingChat) {
-                $this->db->commit();
-                http_response_code(200);
-                echo json_encode([
-                    'message' => 'Chat existente encontrado',
-                    'chat_uuid' => $existingChat['uuid'],
-                    'chat_id' => $existingChat['id'],
-                    'chat_title' => $existingChat['title'],
-                    'created' => false
-                ]);
-                return;
-            }
-
-            // Crear nuevo chat si no existe
-            $stmt = $this->db->prepare("SELECT name FROM users WHERE id = :participant_id");
-            $stmt->execute([':participant_id' => $participantId]);
-            $participantUser = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            $chatTitle = "Chat con " . $participantUser['name'];
-            $chatUuid = $this->generateUuid();
-
-            $insertChatQuery = "INSERT INTO chats (uuid, chat_type, title, created_by, is_group)
-                            VALUES (:uuid, 'user_to_user', :title, :created_by, FALSE)";
-            $stmt = $this->db->prepare($insertChatQuery);
-            $stmt->execute([
-                ':uuid' => $chatUuid,
-                ':title' => $chatTitle,
-                ':created_by' => $currentUserId
-            ]);
-            $chatId = $this->db->lastInsertId();
-
-            $this->addParticipant($chatId, $currentUserId, true);
-            $this->addParticipant($chatId, $participantId, false);
-
             $this->db->commit();
+            
+            // NOTIFICACIÓN EN TIEMPO REAL (REDIS) - Por si acaso
+            $this->publishNewChatEvent($existingChat['uuid'], 'user_to_user', $existingChat['title'], [$currentUserId, $participantId]);
 
-            http_response_code(201);
+            http_response_code(200);
             echo json_encode([
-                'message' => 'Chat creado exitosamente',
-                'chat_uuid' => $chatUuid,
-                'chat_id' => $chatId,
-                'chat_title' => $chatTitle,
-                'created' => true
+                'message' => 'Chat existente encontrado',
+                'chat_uuid' => $existingChat['uuid'],
+                'chat_id' => $existingChat['id'],
+                'chat_title' => $existingChat['title'],
+                'created' => false
             ]);
+            return;
+        }
+
+        // Crear nuevo chat si no existe
+        $stmt = $this->db->prepare("SELECT name FROM users WHERE id = :participant_id");
+        $stmt->execute([':participant_id' => $participantId]);
+        $participantUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $chatTitle = "Chat con " . $participantUser['name'];
+        $chatUuid = $this->generateUuid();
+
+        $insertChatQuery = "INSERT INTO chats (uuid, chat_type, title, created_by, is_group) 
+                        VALUES (:uuid, 'user_to_user', :title, :created_by, FALSE)";
+        $stmt = $this->db->prepare($insertChatQuery);
+        $stmt->execute([
+            ':uuid' => $chatUuid,
+            ':title' => $chatTitle,
+            ':created_by' => $currentUserId
+        ]);
+        $chatId = $this->db->lastInsertId();
+
+        $this->addParticipant($chatId, $currentUserId, true);
+        $this->addParticipant($chatId, $participantId, false);
+
+        $this->db->commit();
+
+        // NOTIFICACIÓN EN TIEMPO REAL (REDIS)
+        $this->publishNewChatEvent($chatUuid, 'user_to_user', $chatTitle, [$currentUserId, $participantId]);
+
+        http_response_code(201);
+        echo json_encode([
+            'message' => 'Chat creado exitosamente',
+            'chat_uuid' => $chatUuid,
+            'chat_id' => $chatId,
+            'chat_title' => $chatTitle,
+            'created' => true
+        ]);
 
         } catch (PDOException $e) {
             $this->db->rollBack();
@@ -1201,6 +1250,33 @@ class ChatController
         } catch (Exception $e) {
             error_log("Error obteniendo historial de chat: " . $e->getMessage());
             return [];
+        }
+    }
+
+    /**
+     * Publica un evento de nuevo chat en Redis
+     */
+    private function publishNewChatEvent($chatUuid, $chatType, $title, $participantIds)
+    {
+        try {
+            if (!$this->redis) return;
+
+            $event = [
+                'type' => 'new_chat',
+                'chat_uuid' => $chatUuid,
+                'chat_type' => $chatType,
+                'title' => $title,
+                'participants' => $participantIds,
+                'created_at' => date('Y-m-d H:i:s'),
+                'creator_id' => $GLOBALS['current_user']->id,
+                'creator_name' => $GLOBALS['current_user']->name
+            ];
+
+            $this->redis->publish('canal-chat', json_encode($event));
+            error_log("📡 Evento new_chat publicado en Redis para chat: $chatUuid");
+
+        } catch (Exception $e) {
+            error_log("❌ Error publicando evento new_chat en Redis: " . $e->getMessage());
         }
     }
 

@@ -254,10 +254,30 @@ export class ChatEventListeners {
     // ========== HANDLERS DE CHAT CORREGIDOS ==========
 
     static toggleNewChatMenu = (event) => {
+        console.log('🆕 Toggle menú de nuevo chat disparado');
         event?.stopPropagation();
+
         import('../elements.js').then(({ elements }) => {
-            if (elements.newChatMenu) {
-                elements.newChatMenu.classList.toggle('hidden');
+            if (elements.newChatMenu && elements.newChatBtn) {
+                const isHidden = elements.newChatMenu.classList.contains('hidden');
+
+                if (isHidden) {
+                    // Posicionar el menú cerca del botón
+                    const rect = elements.newChatBtn.getBoundingClientRect();
+                    elements.newChatMenu.style.top = `${rect.bottom + 10}px`;
+                    elements.newChatMenu.style.left = `${rect.left - 200}px`; // Ajustar para que no se salga
+
+                    elements.newChatMenu.classList.remove('hidden');
+                    console.log('🔓 Menú de nuevo chat mostrado en:', elements.newChatMenu.style.top, elements.newChatMenu.style.left);
+                } else {
+                    elements.newChatMenu.classList.add('hidden');
+                    console.log('🔒 Menú de nuevo chat ocultado');
+                }
+            } else {
+                console.error('❌ No se pudo encontrar newChatMenu o newChatBtn', {
+                    menu: !!elements.newChatMenu,
+                    btn: !!elements.newChatBtn
+                });
             }
         });
     }

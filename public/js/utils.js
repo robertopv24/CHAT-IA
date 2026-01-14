@@ -122,7 +122,7 @@ export function showApp() {
 }
 
 export function showPanel(panelId) {
-    console.log(`🖥️ [UI DEBUG] Cambiando al panel: ${panelId}`);
+    // console.log(`🖥️ [UI DEBUG] Cambiando al panel: ${panelId}`);
 
     // 1. Manejar paneles de contenido
     if (elements.contentPanels) {
@@ -130,7 +130,7 @@ export function showPanel(panelId) {
             const id = panel.id;
             if (id === panelId) {
                 panel.classList.add('active');
-                console.log(`✅ [UI DEBUG] Panel activado: ${id}`);
+                // console.log(`✅ [UI DEBUG] Panel activado: ${id}`);
             } else {
                 panel.classList.remove('active');
             }
@@ -152,7 +152,7 @@ export function showPanel(panelId) {
             const itemPanelId = item.getAttribute('data-panel');
             if (itemPanelId === menuPanelId) {
                 item.classList.add('active');
-                console.log(`📍 [UI DEBUG] Menú activado para: ${itemPanelId}`);
+                // console.log(`📍 [UI DEBUG] Menú activado para: ${itemPanelId}`);
             } else {
                 item.classList.remove('active');
             }

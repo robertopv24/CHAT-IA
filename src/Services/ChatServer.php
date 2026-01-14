@@ -170,12 +170,25 @@ class ChatServer implements MessageComponentInterface
         }
 
         // Eliminar la asociación de usuario si existe
-        if (isset($conn->userId)) {
-            $userId = $conn->userId;
-            unset($this->userConnections[$userId]);
-            unset($this->connectionUsers[$conn->resourceId]);
-            error_log("👋 Usuario {$userId} desconectado");
-        } else {
+    if (isset($conn->userId)) {
+        $userId = $conn->userId;
+        if (isset($this->userConnections[$userId])) {
+            // Filtrar las conexiones para remover solo la actual
+            $this->userConnections[$userId] = array_filter(
+                $this->userConnections[$userId],
+                function($c) use ($conn) {
+                    return $c->resourceId !== $conn->resourceId;
+                }
+            );
+            
+            // Si no quedan conexiones, limpiar la entrada
+            if (empty($this->userConnections[$userId])) {
+                unset($this->userConnections[$userId]);
+            }
+        }
+        unset($this->connectionUsers[$conn->resourceId]);
+        error_log("👋 Conexión {$conn->resourceId} del usuario {$userId} cerrada");
+    } else {
             error_log("👋 Conexión no autenticada {$conn->resourceId} desconectada.");
         }
 
@@ -226,6 +239,12 @@ class ChatServer implements MessageComponentInterface
         // Manejar notificaciones
         if ($redisData['type'] === 'new_notification') {
             $this->handleNewNotification($redisData);
+            return;
+        }
+
+        // 🆕 Manejar nuevo chat
+        if ($redisData['type'] === 'new_chat') {
+            $this->handleNewChat($redisData);
             return;
         }
 
@@ -363,6 +382,16 @@ class ChatServer implements MessageComponentInterface
                      }
                      break;
 
+                 case 'new_chat':
+                     $required = ['chat_uuid', 'chat_type', 'participants'];
+                     foreach ($required as $field) {
+                         if (!isset($message[$field])) {
+                             error_log("❌ ChatServer Validation Fail: Falta '$field' en new_chat.");
+                             return false;
+                         }
+                     }
+                     break;
+
                  default:
                      error_log("❌ ChatServer Validation Fail: Tipo desconocido '{$message['type']}'.");
                      return false;
@@ -416,13 +445,19 @@ class ChatServer implements MessageComponentInterface
         $chatTitle = $messageData['chat_title'] ?? 'Chat';
         $isReply = $messageData['is_reply'] ?? false;
 
-        foreach ($this->userConnections as $userId => $connection) {
+        foreach ($this->userConnections as $userId => $connections) { // Iterar sobre el array de conexiones
             // No notificar al remitente
             if ($userId == $senderId) continue;
 
-            // Verificar si está suscrito al chat
-            $isSubscribed = isset($this->connectionChats[$connection->resourceId]) &&
-                           in_array($chatUuid, $this->connectionChats[$connection->resourceId]);
+            // Verificar si alguna de las conexiones del usuario está suscrita al chat
+            $isSubscribed = false;
+            foreach ($connections as $conn) {
+                if (isset($this->connectionChats[$conn->resourceId]) &&
+                    in_array($chatUuid, $this->connectionChats[$conn->resourceId])) {
+                    $isSubscribed = true;
+                    break;
+                }
+            }
 
             // Enviar notificación push SOLO si el usuario NO está viendo el chat activamente
             if (!$isSubscribed) {
@@ -471,7 +506,11 @@ class ChatServer implements MessageComponentInterface
             $from->authenticated = true;
             $from->userId = $userId;
 
-            $this->userConnections[$userId] = $from;
+            // Almacenar la conexión en un array para el usuario
+            if (!isset($this->userConnections[$userId])) {
+                $this->userConnections[$userId] = [];
+            }
+            $this->userConnections[$userId][] = $from;
             $this->connectionUsers[$from->resourceId] = $userId;
             error_log("✅ Usuario {$userId} autenticado exitosamente en conexión {$from->resourceId}");
 
@@ -571,6 +610,9 @@ class ChatServer implements MessageComponentInterface
             $this->chatConnections[$chatUuid][] = $conn;
 
             // Agregar chat a la lista de chats de la conexión
+            if (!isset($this->connectionChats[$conn->resourceId])) {
+                $this->connectionChats[$conn->resourceId] = [];
+            }
             if (!in_array($chatUuid, $this->connectionChats[$conn->resourceId])) {
                 $this->connectionChats[$conn->resourceId][] = $chatUuid;
             }
@@ -610,23 +652,56 @@ class ChatServer implements MessageComponentInterface
                     return $chat !== $chatUuid;
                 }
             );
+            if (empty($this->connectionChats[$conn->resourceId])) {
+                unset($this->connectionChats[$conn->resourceId]);
+            }
         }
     }
 
     /**
-     * Enviar mensaje a usuario específico
+     * 🆕 Manejar nuevo chat en tiempo real
      */
-    private function sendToUser(int $userId, string $message)
+    private function handleNewChat(array $data)
     {
+        $participants = $data['participants'] ?? [];
+        $creatorId = $data['creator_id'] ?? null;
+
+        $payload = [
+            'type' => 'new_chat',
+            'chat_uuid' => $data['chat_uuid'],
+            'chat_type' => $data['chat_type'],
+            'title' => $data['title'],
+            'creator_name' => $data['creator_name'],
+            'timestamp' => $data['created_at']
+        ];
+
+        error_log("📡 Difundiendo new_chat a " . count($participants) . " participantes");
+
+        foreach ($participants as $userId) {
+            // No enviar al creador si ya lo manejó el frontend?
+            // En realidad es mejor enviarlo a todos para que el estado se sincronice en todas sus pestañas
+            $this->sendToUser((int)$userId, json_encode($payload));
+        }
+    }
+
+    /**
+     * Envía un mensaje a todas las conexiones de un usuario específico
+     */
+    private function sendToUser(int $userId, string $message): bool
+    {
+        $sent = false;
         if (isset($this->userConnections[$userId])) {
-            try {
-                $this->userConnections[$userId]->send($message);
-                return true;
-            } catch (Exception $e) {
-                unset($this->userConnections[$userId]);
+            foreach ($this->userConnections[$userId] as $conn) {
+                try {
+                    $conn->send($message);
+                    $sent = true;
+                } catch (Exception $e) {
+                    error_log("❌ Error enviando a usuario {$userId} (conexión {$conn->resourceId}): " . $e->getMessage());
+                    // Considerar limpiar la conexión muerta aquí si es necesario
+                }
             }
         }
-        return false;
+        return $sent;
     }
 
     /**

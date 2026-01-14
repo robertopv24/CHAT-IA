@@ -93,13 +93,13 @@ class NotificationController
             $stmt = $this->db->prepare($query);
             $stmt->execute([':notification_id' => $notificationId, ':user_id' => $currentUserId]);
 
-            if ($stmt->rowCount() > 0) {
-                http_response_code(200);
-                echo json_encode(['message' => 'Notificación marcada como leída.']);
-            } else {
-                http_response_code(404);
-                echo json_encode(['error' => 'Notificación no encontrada']);
-            }
+            // Si no se actualizó ninguna fila, puede ser que ya estuviera leída.
+            // Retornamos 200 para evitar errores 404 ruidosos en la consola del cliente.
+            http_response_code(200);
+            echo json_encode([
+                'message' => 'Notificación procesada.',
+                'already_read' => ($stmt->rowCount() === 0)
+            ]);
         } catch (PDOException $e) {
             http_response_code(500);
             echo json_encode(['error' => 'Error en la base de datos: ' . $e->getMessage()]);

@@ -12,6 +12,7 @@ export class ModalEventListeners {
     static async setup() {
         await this.setupChatModalListeners();
         await this.setupGlobalModalListeners();
+        await this.setupGroupModalListeners();
         console.log('✅ Modal event listeners configurados');
     }
 
@@ -38,6 +39,81 @@ export class ModalEventListeners {
         if (elements.renameCancelBtn) {
             elements.renameCancelBtn.removeEventListener('click', hideRenameModal);
             elements.renameCancelBtn.addEventListener('click', hideRenameModal);
+        }
+
+        // Abrir modal de grupo desde el menú contextual
+        if (elements.createGroupChatBtn) {
+            console.log('✅ Botón de creación de grupo encontrado, vinculando listener');
+            elements.createGroupChatBtn.removeEventListener('click', this.handleShowGroupModal);
+            elements.createGroupChatBtn.addEventListener('click', this.handleShowGroupModal);
+        } else {
+            console.error('❌ Botón de creación de grupo NO encontrado en elements.js');
+        }
+    }
+
+    static handleShowGroupModal = async () => {
+        console.log('🖱️ Clic detectado en el botón de creación de grupo');
+        const { showGroupCreateModal } = await import('../modals.js');
+        await showGroupCreateModal();
+    }
+
+    static async setupGroupModalListeners() {
+        const { elements } = await import('../elements.js');
+        const { hideGroupCreateModal } = await import('../modals.js');
+        const { createGroupChat } = await import('../chat/chatUI.js');
+
+        if (elements.groupCreateCancelBtn) {
+            elements.groupCreateCancelBtn.addEventListener('click', hideGroupCreateModal);
+        }
+
+        if (elements.groupCreateConfirmBtn) {
+            elements.groupCreateConfirmBtn.addEventListener('click', async () => {
+                const title = elements.groupNameInput.value.trim();
+                const selectedCheckboxes = elements.groupParticipantsList.querySelectorAll('.participant-checkbox:checked');
+                const participantUuids = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+                if (!title) {
+                    showNotification('El nombre del grupo es obligatorio', 'warning');
+                    return;
+                }
+
+                if (participantUuids.length === 0) {
+                    showNotification('Selecciona al menos un participante', 'warning');
+                    return;
+                }
+
+                elements.groupCreateConfirmBtn.disabled = true;
+                elements.groupCreateConfirmBtn.textContent = 'Creando...';
+
+                try {
+                    const chatUuid = await createGroupChat(title, participantUuids);
+                    if (chatUuid) {
+                        hideGroupCreateModal();
+                    }
+                } finally {
+                    elements.groupCreateConfirmBtn.disabled = false;
+                    elements.groupCreateConfirmBtn.textContent = 'Crear Grupo';
+                }
+            });
+        }
+
+        // Búsqueda en tiempo real de participantes
+        if (elements.groupContactSearch) {
+            elements.groupContactSearch.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                const items = elements.groupParticipantsList.querySelectorAll('label');
+                items.forEach(item => {
+                    const name = item.querySelector('.text-sm').textContent.toLowerCase();
+                    const email = item.querySelector('.text-xs').textContent.toLowerCase();
+                    if (name.includes(term) || email.includes(term)) {
+                        item.classList.remove('hidden');
+                        item.classList.add('flex');
+                    } else {
+                        item.classList.remove('flex');
+                        item.classList.add('hidden');
+                    }
+                });
+            });
         }
     }
 
@@ -137,9 +213,15 @@ export class ModalEventListeners {
                 });
             }
 
-            if (!elements.avatarUploadModal.classList.contains('hidden')) {
+            if (!elements.avatarUploadModal?.classList.contains('hidden')) {
                 import('../avatarUI.js').then(({ hideAvatarUploadModal }) => {
                     hideAvatarUploadModal();
+                });
+            }
+
+            if (!elements.groupCreateModal.classList.contains('hidden')) {
+                import('../modals.js').then(({ hideGroupCreateModal }) => {
+                    hideGroupCreateModal();
                 });
             }
         }

@@ -31,8 +31,39 @@
         <div class="context-menu-item" id="create-ai-chat-btn">
             <i class="fas fa-robot"></i> Nuevo chat con IA
         </div>
+        <div class="context-menu-item" id="create-group-chat-btn">
+            <i class="fas fa-users"></i> Nuevo grupo
+        </div>
         <div class="context-menu-item" id="message-contact-btn">
             <i class="fas fa-user-plus"></i> Enviar mensaje a contacto
+        </div>
+    </div>
+
+    <!-- Modal para crear grupo -->
+    <div id="group-create-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="text-lg font-bold">Crear nuevo grupo</h3>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-1">Nombre del grupo</label>
+                    <input type="text" id="group-name-input" class="modal-input" placeholder="Ej. Equipo de Desarrollo">
+                </div>
+                <div class="mb-2">
+                    <label class="block text-sm font-medium mb-1">Seleccionar participantes</label>
+                    <div class="search-box mb-2">
+                        <input type="text" id="group-contact-search" class="modal-input text-sm" placeholder="Buscar contactos...">
+                    </div>
+                </div>
+                <div id="group-participants-list" class="max-h-60 overflow-y-auto border border-gray-700 rounded p-2 bg-gray-800 bg-opacity-50">
+                    <!-- Los contactos se cargarán aquí con checkboxes -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn secondary" id="group-create-cancel">Cancelar</button>
+                <button class="modal-btn primary" id="group-create-confirm">Crear Grupo</button>
+            </div>
         </div>
     </div>
 

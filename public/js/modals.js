@@ -161,6 +161,80 @@ export function hideTripletEditModal() {
     }
 }
 
+// Modal de creación de grupo
+export async function showGroupCreateModal() {
+    console.log('🏁 showGroupCreateModal llamada');
+    if (!elements.groupCreateModal) {
+        console.error('❌ elements.groupCreateModal no encontrado');
+        return;
+    }
+
+    hideContextMenus();
+
+    // MOSTRAR INMEDIATAMENTE PARA FEEDBACK
+    console.log('🔓 Mostrando modal de grupo (UX inmediata)');
+    elements.groupCreateModal.classList.remove('hidden');
+
+    if (elements.groupNameInput) {
+        elements.groupNameInput.value = '';
+        elements.groupNameInput.focus();
+    }
+    if (elements.groupContactSearch) elements.groupContactSearch.value = '';
+
+    console.log('⏳ Cargando lista de participantes en segundo plano...');
+    // Cargar lista de contactos para selección múltiple
+    await renderGroupParticipantsList();
+    console.log('✅ Proceso de showGroupCreateModal finalizado');
+}
+
+export function hideGroupCreateModal() {
+    if (elements.groupCreateModal) {
+        elements.groupCreateModal.classList.add('hidden');
+    }
+}
+
+async function renderGroupParticipantsList() {
+    if (!elements.groupParticipantsList) return;
+
+    elements.groupParticipantsList.innerHTML = '<p class="text-xs text-gray-500 py-2">Cargando contactos...</p>';
+
+    try {
+        const { apiCall } = await import('./api.js');
+        const data = await apiCall('/api/user/contacts');
+        const contacts = data.contacts || data;
+
+        if (!contacts || contacts.length === 0) {
+            elements.groupParticipantsList.innerHTML = '<p class="text-xs text-gray-400 py-2">No tienes contactos para agregar</p>';
+            return;
+        }
+
+        elements.groupParticipantsList.innerHTML = '';
+        contacts.forEach(contact => {
+            if (contact.is_blocked) return;
+
+            const item = document.createElement('label');
+            item.className = 'flex items-center p-2 hover:bg-white hover:bg-opacity-5 rounded cursor-pointer transition-colors';
+            item.innerHTML = `
+                <input type="checkbox" class="participant-checkbox mr-3 accent-purple-500" value="${contact.uuid}">
+                <div class="flex items-center flex-1">
+                    <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mr-2 text-xs overflow-hidden contact-avatar-placeholder">
+                        ${contact.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-sm font-medium">${contact.name}</span>
+                        <span class="text-xs text-gray-500">${contact.email}</span>
+                    </div>
+                </div>
+            `;
+            elements.groupParticipantsList.appendChild(item);
+        });
+
+    } catch (error) {
+        console.error('Error cargando contactos para grupo:', error);
+        elements.groupParticipantsList.innerHTML = '<p class="text-xs text-red-500 py-2">Error al cargar contactos</p>';
+    }
+}
+
 // Selector de emojis
 export function toggleEmojiPicker() {
     if (!elements.emojiPickerContainer) return;
@@ -182,6 +256,7 @@ export function hideAllModals() {
     hideFileUploadModal();
     hideMessageSearchModal();
     hideTripletEditModal();
+    hideGroupCreateModal();
     hideEmojiPicker();
     hideContextMenus();
 }
@@ -235,6 +310,13 @@ export function setupModalCloseListeners() {
         if (elements.tripletEditModal && !elements.tripletEditModal.classList.contains('hidden') &&
             !elements.tripletEditModal.contains(e.target)) {
             hideTripletEditModal();
+        }
+
+        // Group Create Modal
+        if (elements.groupCreateModal && !elements.groupCreateModal.classList.contains('hidden') &&
+            !elements.groupCreateModal.contains(e.target) &&
+            !document.getElementById('create-group-chat-btn')?.contains(e.target)) {
+            hideGroupCreateModal();
         }
 
         // Emoji Picker - CORRECCIÓN CRÍTICA

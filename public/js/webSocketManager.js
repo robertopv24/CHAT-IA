@@ -108,7 +108,9 @@ export class WebSocketManager {
     handleMessage(event) {
         try {
             const data = JSON.parse(event.data);
-            console.log('📨 Mensaje WebSocket recibido:', data);
+
+            // Log silenciado aquí. Se gestiona de forma centralizada en websocket.js
+            // para evitar duplicidad y permitir filtrado granular.
 
             // Ejecutar handlers específicos por tipo
             if (data.type && this.messageHandlers.has(data.type)) {
@@ -262,7 +264,8 @@ export class WebSocketManager {
 
         this.heartbeatInterval = setInterval(() => {
             if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
-                this.send({ type: 'ping' });
+                // Enviar ping silenciosamente
+                this.ws.send(JSON.stringify({ type: 'ping' }));
             }
         }, this.options.heartbeatInterval);
     }
