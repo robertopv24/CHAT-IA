@@ -4,111 +4,139 @@
 [![PHP](https://img.shields.io/badge/PHP-8.1+-777bb4.svg)](https://www.php.net/)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776ab.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://fastapi.tiangolo.com/)
+[![MariaDB](https://img.shields.io/badge/MariaDB-10.11+-003545.svg)](https://mariadb.org/)
 
-**Fox-IA** es una plataforma avanzada de chat en tiempo real potenciada por Inteligencia Artificial de vanguardia. Diseñada con una arquitectura híbrida (PHP + Python), Fox-IA combina lo mejor del desarrollo web tradicional con la potencia de los modelos de lenguaje modernos (LLMs) como DeepSeek, optimizados para ejecutarse incluso en entornos con recursos limitados mediante cuantización de 4 bits.
-
----
-
-## 🚀 Características Principales
-
-- **💬 Chat en Tiempo Real**: Comunicación instantánea mediante WebSockets (Ratchet/PHP).
-- **🧠 IA Avanzada (DeepSeek)**: Integración con modelos de lenguaje de última generación optimizados con cuantización de 4 bits para un rendimiento excepcional.
-- **📂 Gestión de Archivos Inteligente**: Sube y comparte archivos en el chat con procesamiento optimizado.
-- **🔔 Notificaciones Dinámicas**: Sistema de alertas en tiempo real para mantener el flujo de la conversación.
-- **🛠️ Arquitectura de Nodos**: Servidor de IA independiente mediante FastAPI, permitiendo el escalado horizontal de la inteligencia.
-- **🔒 Seguridad Robusta**: Autenticación mediante JWT, protección CSRF y manejo seguro de sesiones.
+**Fox-IA** no es solo un chat; es un ecosistema avanzado de **Inteligencia Artificial Distribuida**. Utiliza una arquitectura híbrida optimizada para ofrecer respuestas ultra-rápidas, personalizadas y seguras. Su núcleo combina la robustez de **PHP** para la orquestación y la potencia de los **LLMs modernos** (como DeepSeek) para la generación de lenguaje natural.
 
 ---
 
-## 🛠️ Stack Tecnológico
+## 🚀 Características Avanzadas
 
-### Backend (Core)
+### 🧠 Inteligencia con RAG Basado en Tripletas
 
-* **PHP 8.1+**: Motor principal para la lógica de negocio y gestión de usuarios.
-- **MySQL**: Base de datos para persistencia de conversaciones y metadatos.
-- **Ratchet**: WebSockets para comunicación bidireccional en tiempo real.
-- **Composer**: Gestión de dependencias (Dotenv, JWT, PHPMailer, mPDF).
+A diferencia de los sistemas de chat tradicionales, Fox-IA utiliza una base de conocimientos estructurada mediante **tripletas (Sujeto - Predicado - Objeto)**.
 
-### Servidor de IA (Cerebro)
+- **Conocimiento Global**: Base de datos de hechos verificados que la IA puede consultar.
+- **Contexto Dinámico**: La IA aprende de la conversación actual, extrayendo tripletas en tiempo real para mantener una memoria a corto y largo plazo precisa.
+- **Búsqueda Semántica**: Procedimientos almacenados optimizados (`SearchKnowledge`) para recuperar la información más relevante en milisegundos.
 
-* **Python 3.10+**: Entorno de ejecución para modelos de ML.
-- **FastAPI**: API de alto rendimiento para el servicio de inferencia.
-- **Transformers (Hugging Face)**: Integración con modelos LLM.
-- **BitsAndBytes**: Implementación de cuantización de 4 bits (NF4).
-- **Sentence Transformers**: Generación de embeddings para capacidades RAG.
+### ⚡ Optimización de Modelos y Cuantización
 
-### Frontend
+- **4-bit Quantization (NF4)**: Los modelos se ejecutan usando `BitsAndBytes`, permitiendo cargar LLMs potentes (7B+ parámetros) en hardware de consumo o entornos limitados como Google Colab.
+- **Inferencia Streaming**: Respuestas en tiempo real mediante *Server-Sent Events (SSE)* para una experiencia de usuario fluida.
 
-* **Vanilla JS**: Lógica de interfaz rápida y sin sobrecarga de frameworks.
-- **CSS Dinámico**: Diseño premium con efectos de glassmorphism y micro-animaciones.
+### 🛠️ Arquitectura Multimodal y Escalable
 
----
-
-## 🏗️ Arquitectura del Sistema
-
-Fox-IA utiliza un enfoque desacoplado:
-
-1. **Frontend**: Interfaz de usuario interactiva que se comunica vía HTTP (REST) y WebSockets.
-2. **Servidor Web (PHP)**: Gestiona la autenticación, base de datos y la orquestación de la lógica del chat.
-3. **Servidor de IA (Python/FastAPI)**: Actúa como un nodo de procesamiento de IA. Recibe peticiones del backend PHP y devuelve respuestas generadas por el modelo DeepSeek.
+- **Sistema de Nodos IA**: Escalado horizontal mediante registro de nodos externos (`api/ai/register-node`).
+- **WebSockets de Alta Concurrencia**: Implementación con **Ratchet** para manejar miles de conexiones simultáneas sin latencia perceptible.
+- **Gestión de Archivos**: Procesamiento de imágenes y documentos con generación de tokens de acceso seguro.
 
 ---
 
-## 📦 Instalación
+## 🏗️ Estructura del Proyecto
 
-### Requisitos Previos
-
-- Servidor Web (Apache/Nginx) con soporte PHP 8.1+.
-- MySQL 8.0+.
-- Python 3.10+ con soporte CUDA (opcional, pero recomendado).
-- Composer y Pip.
-
-### Pasos de Configuración
-
-1. **Clonar el repositorio**:
-
-    ```bash
-    git clone https://github.com/robertopv24/CHAT-IA.git
-    cd CHAT-IA
-    ```
-
-2. **Configurar el Backend PHP**:
-
-    ```bash
-    composer install
-    cp .env.example .env
-    # Edita el archivo .env con tus credenciales de base de datos
-    ```
-
-3. **Importar Base de Datos**:
-    Importa el archivo `foxia.sql` en tu instancia de MySQL.
-
-4. **Configurar el Servidor de IA**:
-
-    ```bash
-    # Se recomienda usar un entorno virtual
-    pip install -r requirements.txt # Si existe, o instala manualmente torch, transformers, fastapi
-    python server.py
-    ```
-
-5. **Iniciar Servidor WebSockets**:
-
-    ```bash
-    bash server-websockets.sh
-    ```
+```text
+📂 CHAT-IA
+├── 📂 admin            # Panel de administración (HTML/JS)
+├── 📂 bin              # Scripts ejecutables y binarios
+├── 📂 public           # Punto de entrada web, activos y JS frontend
+│   ├── 📂 assets       # Imágenes y recursos estáticos
+│   ├── 📂 js           # Lógica compleja del cliente (Chat, UI, WebSockets)
+│   └── 📂 uploads      # Almacenamiento seguro de archivos subidos
+├── 📂 src              # El "Core" del sistema (PHP)
+│   ├── 📂 AI           # Integración específica con el motor de IA
+│   ├── 📂 Config       # Gestión de entorno y base de datos
+│   ├── 📂 Controllers  # Lógica de endpoints (MVC)
+│   ├── 📂 Middleware   # Seguridad (Auth, Admin, Rate Limiting)
+│   ├── 📂 Services     # Capas de servicio (Mail, Uploads, ChatServer)
+│   └── router.php      # Orquestador central de rutas
+├── server.py           # Servidor de IA (Python/FastAPI)
+├── foxia.sql           # Esquema de base de datos y procedimientos
+└── server-websockets.sh # Script de arranque del servidor WebSocket
+```
 
 ---
 
-## 🛡️ Licencia
+## 🛠️ Stack Tecnológico Detallado
 
-Este proyecto es de propiedad exclusiva (**Proprietary**). Todos los derechos reservados a [robertopv24](https://github.com/robertopv24).
+### Backend PHP
+
+- **Autenticación**: JWT (JSON Web Tokens) con rotación de sesiones.
+- **Base de Datos**: MariaDB con uso intensivo de procedimientos almacenados y triggers para integridad referencial y auditoría.
+- **Comunicación**: Servidor WebSocket independiente basado en Ratchet.
+- **Servicios**: PHPMailer (validación de registros), mPDF (reportes), Predis (cacheo opcional).
+
+### Nodo de IA (Python)
+
+- **Framework**: FastAPI + Uvicorn.
+- **LLM**: DeepSeek-R1-Distill-Qwen-7B (configurable).
+- **Procesamiento**: PyTorch + Transformers (Hugging Face).
+- **Embeddings**: Sentence Transformers para memoria contextual.
 
 ---
 
-## 🤝 Contacto
+## 📦 Guía de Instalación Avanzada
 
-Desarrollado por **robertopv24**.
-¡Si tienes alguna duda o sugerencia, no dudes en abrir un issue!
+### 1. Preparación del Entorno
+
+Es vital configurar las variables de entorno correctamente en un archivo `.env` en la raíz:
+
+```env
+DB_HOST=localhost
+DB_NAME=foxia
+DB_USER=tu_usuario
+DB_PASS=tu_contraseña
+
+SMTP_HOST=smtp.ejemplo.com
+SMTP_USER=user@ejemplo.com
+SMTP_PASS=tu_pass
+
+JWT_SECRET=tu_clave_secreta_super_larga
+WS_PORT=8888
+```
+
+### 2. Base de Datos
+
+Importa el esquema y los procedimientos:
+
+```bash
+mysql -u usuario -p foxia < foxia.sql
+```
+
+### 3. Servidor de IA (Python)
+
+Para el nodo de IA, instala las dependencias de alta eficiencia:
+
+```bash
+pip install torch transformers fastapi uvicorn bitsandbytes accelerate sentence-transformers
+python server.py
+```
+
+### 4. Servidor de Chat (WebSockets)
+
+Ejecuta el servicio de tiempo real:
+
+```bash
+php bin/chat-server.php  # O usa el script .sh proporcionado
+```
 
 ---
-*Hecho con ❤️ por el equipo de Fox-IA*
+
+## 🛡️ Seguridad y Administración
+
+Fox-IA incluye un **Panel de Administración** completo accesible en `/admin` para usuarios autorizados, donde se pueden:
+
+- Monitorear estadísticas globales del sistema en tiempo real.
+- Gestionar nodos de IA activos.
+- Administrar usuarios, contactos y configuraciones de privacidad.
+- Revisar logs de sistema y errores del frontend.
+
+---
+
+## 📄 Licencia
+
+Este proyecto opera bajo una licencia **Propietaria**.
+Queda prohibida la reproducción, distribución o modificación sin autorización expresa de **robertopv24**.
+
+---
+*Diseñado para ser la frontera entre la web clásica y la nueva generación de aplicaciones asistidas por IA.*
