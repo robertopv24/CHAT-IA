@@ -1,6 +1,12 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Excepción específica para el directorio minimarcket y sus contenidos
+    RewriteRule ^minimarcket($|/) - [L]
+
+    # Excepción específica para el directorio omnipos y sus contenidos
+    RewriteRule ^omnipos($|/) - [L]
+
     # Redirige todas las peticiones a la carpeta /public
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
