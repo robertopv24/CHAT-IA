@@ -51,4 +51,12 @@ class Database
 
         return $this->connection;
     }
+
+    /**
+     * 🔥 NUEVO MÉTODO: Resetea la conexión para forzar una reconexión en la próxima llamada a getConnection()
+     */
+    public function resetConnection(): void
+    {
+        $this->connection = null;
+    }
 }
