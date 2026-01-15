@@ -19,9 +19,10 @@ class ChatServer implements MessageComponentInterface
     private $connectionUsers;
     private $connectionChats;
     private $metricsCallback;
-    private $db;
+    private $dbFactory;
+    private $pdo;
 
-    public function __construct($db = null)
+    public function __construct($dbFactory = null)
     {
         $this->clients = new SplObjectStorage;
         $this->userConnections = [];
@@ -29,7 +30,8 @@ class ChatServer implements MessageComponentInterface
         $this->connectionUsers = [];
         $this->connectionChats = [];
         $this->metricsCallback = null;
-        $this->db = $db;
+        $this->dbFactory = $dbFactory;
+        $this->pdo = $dbFactory ? $dbFactory->getConnection() : null;
         error_log("🔄 Servidor de Chat Fox-IA iniciado...");
     }
 
@@ -832,11 +834,42 @@ class ChatServer implements MessageComponentInterface
     }
 
     /**
+     * 🔥 NUEVO MÉTODO: Asegura que la conexión a la base de datos esté activa
+     */
+    private function ensureDbConnection(): ?\PDO
+    {
+        if (!$this->dbFactory) return null;
+
+        try {
+            // Intentar una consulta simple para ver si la conexión sigue viva
+            if ($this->pdo) {
+                $this->pdo->query("SELECT 1");
+            } else {
+                $this->pdo = $this->dbFactory->getConnection();
+            }
+        } catch (\PDOException $e) {
+            error_log("🔄 Detectada conexión de BD perdida, intentando reconectar...");
+            try {
+                $this->dbFactory->resetConnection();
+                $this->pdo = $this->dbFactory->getConnection();
+                error_log("✅ Reconexión a BD exitosa");
+            } catch (\Exception $reconnectError) {
+                error_log("❌ Fallo crítico en reconexión a BD: " . $reconnectError->getMessage());
+                $this->pdo = null;
+            }
+        }
+
+        return $this->pdo;
+    }
+
+    /**
      * Verificar si un usuario es participante de un chat - SEGURIDAD CRÍTICA
      */
     private function isUserParticipant(int $userId, string $chatUuid): bool
     {
-        if (!$this->db) {
+        $pdo = $this->ensureDbConnection();
+        
+        if (!$pdo) {
             error_log("⚠️ ChatServer: No hay conexión a base de datos para validar membresía. Permitiendo por defecto (Riesgo).");
             return true;
         }
@@ -847,14 +880,30 @@ class ChatServer implements MessageComponentInterface
                      JOIN chats c ON cp.chat_id = c.id
                      WHERE cp.user_id = :user_id AND c.uuid = :chat_uuid";
 
-            $stmt = $this->db->prepare($query);
+            $stmt = $pdo->prepare($query);
             $stmt->execute(['user_id' => $userId, 'chat_uuid' => $chatUuid]);
 
             return (bool)$stmt->fetch();
 
         } catch (Exception $e) {
             error_log("❌ Error validando membresía en ChatServer: " . $e->getMessage());
-            // En caso de error de BD, por seguridad denegamos el acceso
+            
+            // Si el error es específicamente de conexión perdida, intentamos reconectar una vez más
+            if (strpos($e->getMessage(), 'gone away') !== false || strpos($e->getMessage(), 'Lost connection') !== false) {
+                error_log("🔄 Error de conexión detectado en consulta, reintentando...");
+                $pdo = $this->ensureDbConnection();
+                if ($pdo) {
+                    try {
+                        $stmt = $pdo->prepare($query);
+                        $stmt->execute(['user_id' => $userId, 'chat_uuid' => $chatUuid]);
+                        return (bool)$stmt->fetch();
+                    } catch (Exception $retryError) {
+                        error_log("❌ Fallo en reintento de consulta: " . $retryError->getMessage());
+                    }
+                }
+            }
+            
+            // En caso de error de BD persistente, por seguridad denegamos el acceso
             return false;
         }
     }
