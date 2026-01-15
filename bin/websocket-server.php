@@ -438,9 +438,8 @@ foreach ($requiredEnvVars as $var) {
 // Crear instancia del servidor de chat
 try {
     $database = new Database();
-    $db = $database->getConnection();
-    $chatServer = new ChatServer($db);
-    echo "✅ Servidor de chat inicializado con conexión a base de datos\n";
+    $chatServer = new ChatServer($database);
+    echo "✅ Servidor de chat inicializado con factoría de base de datos\n";
 } catch (\Exception $e) {
     echo "❌ Error inicializando servidor de chat: " . $e->getMessage() . "\n";
     exit(1);
