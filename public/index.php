@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -8,9 +9,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FoxIA - Asistente Cognitivo</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" integrity="sha384-wcIxkf4k558AjM3Yz3BBFQUbk/zgIYC2R0QpeeYb+TwlBVMrlgLqwRjRtGZiK7ww" crossorigin="anonymous">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js" integrity="sha384-hIoBPJpTUs74ddyc4bFZSM1TVlQDA60VBbJS0oA934VSz82sBx1X7kSx2ATBDIyd" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css"
+        integrity="sha384-wcIxkf4k558AjM3Yz3BBFQUbk/zgIYC2R0QpeeYb+TwlBVMrlgLqwRjRtGZiK7ww" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"
+        integrity="sha384-hIoBPJpTUs74ddyc4bFZSM1TVlQDA60VBbJS0oA934VSz82sBx1X7kSx2ATBDIyd"
+        crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"
+        integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk"
+        crossorigin="anonymous"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,6 +28,7 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <!-- Notificación flotante -->
     <div id="notification" class="notification hidden"></div>
@@ -53,10 +60,12 @@
                 <div class="mb-2">
                     <label class="block text-sm font-medium mb-1">Seleccionar participantes</label>
                     <div class="search-box mb-2">
-                        <input type="text" id="group-contact-search" class="modal-input text-sm" placeholder="Buscar contactos...">
+                        <input type="text" id="group-contact-search" class="modal-input text-sm"
+                            placeholder="Buscar contactos...">
                     </div>
                 </div>
-                <div id="group-participants-list" class="max-h-60 overflow-y-auto border border-gray-700 rounded p-2 bg-gray-800 bg-opacity-50">
+                <div id="group-participants-list"
+                    class="max-h-60 overflow-y-auto border border-gray-700 rounded p-2 bg-gray-800 bg-opacity-50">
                     <!-- Los contactos se cargarán aquí con checkboxes -->
                 </div>
             </div>
@@ -133,7 +142,8 @@
                 <h3 class="text-lg font-bold">Asignar Apodo al Contacto</h3>
             </div>
             <div class="modal-body">
-                <input type="text" id="nickname-input" class="modal-input" placeholder="Apodo (dejar en blanco para quitar)">
+                <input type="text" id="nickname-input" class="modal-input"
+                    placeholder="Apodo (dejar en blanco para quitar)">
             </div>
             <div class="modal-footer">
                 <button class="modal-btn secondary" id="nickname-cancel">Cancelar</button>
@@ -397,11 +407,13 @@
             <div class="content-body">
                 <div class="help-section mb-6">
                     <h3 class="text-lg font-medium mb-2">¿Cómo usar FoxIA?</h3>
-                    <p class="text-gray-400 mb-4">FoxIA es un asistente cognitivo que puede ayudarte con una variedad de tareas. Simplemente escribe tus preguntas o solicitudes en el chat y FoxIA te responderá.</p>
+                    <p class="text-gray-400 mb-4">FoxIA es un asistente cognitivo que puede ayudarte con una variedad de
+                        tareas. Simplemente escribe tus preguntas o solicitudes en el chat y FoxIA te responderá.</p>
                 </div>
                 <div class="help-section">
                     <h3 class="text-lg font-medium mb-2">Soporte Técnico</h3>
-                    <p class="text-gray-400">Para reportar problemas o solicitar ayuda, contacta a nuestro equipo de soporte en support@foxia.com</p>
+                    <p class="text-gray-400">Para reportar problemas o solicitar ayuda, contacta a nuestro equipo de
+                        soporte en support@foxia.com</p>
                 </div>
             </div>
         </div>
@@ -494,24 +506,68 @@
                 </div>
             </div>
         </div>
+
+        <!-- Panel de Información del Chat -->
+        <div id="chat-info-panel" class="chat-info-panel hidden">
+            <div class="info-header">
+                <h3>Detalles</h3>
+                <i class="fas fa-times" id="close-info-panel"></i>
+            </div>
+
+            <div class="info-body">
+                <div class="info-profile">
+                    <div id="info-avatar" class="chat-avatar large"></div>
+                    <h2 id="info-title">Nombre del Chat</h2>
+                    <p id="info-status" class="text-gray-400 text-sm">Estado del chat</p>
+                </div>
+
+                <div class="info-tabs">
+                    <button class="info-tab active" data-tab="participants" title="Participantes">
+                        <i class="fas fa-users"></i>
+                    </button>
+                    <button class="info-tab" data-tab="images" title="Imágenes">
+                        <i class="fas fa-image"></i>
+                    </button>
+                    <button class="info-tab" data-tab="files" title="Archivos">
+                        <i class="fas fa-file-alt"></i>
+                    </button>
+                    <button class="info-tab" data-tab="audios" title="Audios">
+                        <i class="fas fa-music"></i>
+                    </button>
+                    <button class="info-tab" data-tab="links" title="Enlaces">
+                        <i class="fas fa-link"></i>
+                    </button>
+                </div>
+
+                <div id="info-content-area" class="info-content-area">
+                    <!-- Contenido dinámico aquí -->
+                    <div id="info-participants" class="info-section"></div>
+                    <div id="info-images" class="info-section hidden"></div>
+                    <div id="info-files" class="info-section hidden"></div>
+                    <div id="info-audios" class="info-section hidden"></div>
+                    <div id="info-links" class="info-section hidden"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="js/main.js"></script>
 
     <script>
-            document.addEventListener("DOMContentLoaded", function() {
-                // Opciones de renderizado de KaTeX
-                window.katexRenderOptions = {
-                    delimiters: [
-                        {left: "$$", right: "$$", display: true}, // Para bloques $$...$$
-                        {left: "$", right: "$", display: false},  // Para fórmulas en línea $...$
-                        {left: "\\(", right: "\\)", display: false},
-                        {left: "\\[", right: "\\]", display: true}
-                    ],
-                    throwOnError : false
-                };
-            });
-        </script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // Opciones de renderizado de KaTeX
+            window.katexRenderOptions = {
+                delimiters: [
+                    { left: "$$", right: "$$", display: true }, // Para bloques $$...$$
+                    { left: "$", right: "$", display: false },  // Para fórmulas en línea $...$
+                    { left: "\\(", right: "\\)", display: false },
+                    { left: "\\[", right: "\\]", display: true }
+                ],
+                throwOnError: false
+            };
+        });
+    </script>
 
 </body>
+
 </html>

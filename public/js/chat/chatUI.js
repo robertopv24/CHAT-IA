@@ -7,6 +7,7 @@ import { showNotification, scrollToBottom, showPanel } from '../utils.js';
 import { MessageRenderer } from './messageRenderer.js';
 import { SearchManager } from './searchManager.js';
 import { ChatManager } from './chatManager.js';
+import { ChatInfoManager } from './chatInfoManager.js';
 
 // ========== FUNCIONES PRINCIPALES CORREGIDAS ==========
 
@@ -92,6 +93,12 @@ export function loadChat(chat) {
 
     // Marcar mensajes como leídos
     markChatAsRead(chat.uuid);
+
+    // Si el panel de información está visible, actualizarlo con el nuevo chat
+    const infoPanel = document.getElementById('chat-info-panel');
+    if (infoPanel && !infoPanel.classList.contains('hidden')) {
+        ChatInfoManager.showPanel();
+    }
 }
 
 /**
@@ -273,6 +280,9 @@ export function handleBack() {
 
     // Cancelar cualquier respuesta en curso
     cancelReply();
+
+    // Cerrar panel de información si está abierto
+    ChatInfoManager.hidePanel();
 }
 
 /**

@@ -143,6 +143,10 @@ export class MessageRenderer {
         switch (message.message_type) {
             case 'image':
                 return this.renderImageMessage(message);
+            case 'audio':
+                return this.renderAudioMessage(message);
+            case 'video':
+                return this.renderVideoMessage(message);
             case 'file':
                 return this.renderFileMessage(message);
             case 'text':
@@ -181,13 +185,17 @@ export class MessageRenderer {
         const fileSize = message.file_data.file_size ?
             this.formatFileSize(message.file_data.file_size) : '';
 
+        const isEpub = message.file_data.original_name?.toLowerCase().endsWith('.epub');
+        const fileIcon = isEpub ? 'fa-book-open' : 'fa-file-alt';
+        const iconColor = isEpub ? '#f39c12' : 'var(--primary)';
+
         return `
             <div class="message-file">
                 <a href="${message.file_data.file_url}"
                    download="${this.escapeHTML(message.file_data.original_name || 'archivo')}"
                    class="file-download-link">
-                    <div class="file-icon">
-                        <i class="fas fa-file-alt"></i>
+                   <div class="file-icon" style="color: ${iconColor};">
+                        <i class="fas ${fileIcon}"></i>
                     </div>
                     <div class="file-info">
                         <div class="file-name">${this.escapeHTML(message.file_data.original_name || 'Archivo')}</div>
@@ -199,14 +207,68 @@ export class MessageRenderer {
     }
 
     /**
+     * Renderiza mensaje de audio
+     */
+    static renderAudioMessage(message) {
+        if (!message.file_data?.file_url) {
+            return `<p>🎵 Audio no disponible</p>`;
+        }
+
+        return `
+            <div class="message-audio">
+                <div class="audio-info">
+                    <i class="fas fa-headphones"></i>
+                    <span>${this.escapeHTML(message.file_data.original_name || 'Audio')}</span>
+                </div>
+                <audio controls preload="metadata">
+                    <source src="${message.file_data.file_url}" type="${message.file_data.mime_type || 'audio/mpeg'}">
+                    Tu navegador no soporta el elemento de audio.
+                </audio>
+            </div>
+        `;
+    }
+
+    /**
+     * Renderiza mensaje de video
+     */
+    static renderVideoMessage(message) {
+        if (!message.file_data?.file_url) {
+            return `<p>🎥 Video no disponible</p>`;
+        }
+
+        return `
+            <div class="message-video">
+                <video controls preload="metadata">
+                    <source src="${message.file_data.file_url}" type="${message.file_data.mime_type || 'video/mp4'}">
+                    Tu navegador no soporta el elemento de video.
+                </video>
+                 <div class="video-info">
+                    <i class="fas fa-video"></i>
+                    <span>${this.escapeHTML(message.file_data.original_name || 'Video')}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
      * Renderiza mensaje de texto con sanitización
      */
     static renderTextMessage(message) {
         try {
-            return sanitizeMarkdown(message.content || '');
+            let html = sanitizeMarkdown(message.content || '');
+
+            // Si es solo un link, prepararlo para preview
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const match = urlRegex.exec(message.content || '');
+
+            if (match && match[0]) {
+                const url = match[0];
+                html += `<div class="link-preview-container" data-url="${url}"></div>`;
+            }
+
+            return html;
         } catch (error) {
             console.error('Error sanitizando mensaje:', error);
-            // Fallback seguro
             return DOMPurify.sanitize(message.content || '');
         }
     }
@@ -217,6 +279,9 @@ export class MessageRenderer {
     static applyMessageBehaviors(messageElement, message) {
         // Renderizar matemáticas y código
         this.renderMathAndCode(messageElement);
+
+        // Cargar previews de enlaces
+        this.loadLinkPreviews(messageElement);
 
         // Agregar event listeners
         this.addMessageEventListeners(messageElement, message);
@@ -230,10 +295,10 @@ export class MessageRenderer {
         if (window.renderMathInElement) {
             window.renderMathInElement(element, window.katexRenderOptions || {
                 delimiters: [
-                    {left: "$$", right: "$$", display: true},
-                    {left: "$", right: "$", display: false},
-                    {left: "\\(", right: "\\)", display: false},
-                    {left: "\\[", right: "\\]", display: true}
+                    { left: "$$", right: "$$", display: true },
+                    { left: "$", right: "$", display: false },
+                    { left: "\\(", right: "\\)", display: false },
+                    { left: "\\[", right: "\\]", display: true }
                 ],
                 throwOnError: false
             });
@@ -262,8 +327,8 @@ export class MessageRenderer {
                 const state = stateManager.getState();
                 if (elements.contextMessageDeleteBtn) {
                     const canDelete = state.currentUser &&
-                                    message.user_id == state.currentUser.id &&
-                                    !message.deleted;
+                        message.user_id == state.currentUser.id &&
+                        !message.deleted;
                     elements.contextMessageDeleteBtn.style.display = canDelete ? 'flex' : 'none';
                 }
 
@@ -330,5 +395,61 @@ export class MessageRenderer {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Carga previews de enlaces dinámicamente
+     */
+    static async loadLinkPreviews(element) {
+        const containers = element.querySelectorAll('.link-preview-container');
+        if (containers.length === 0) return;
+
+        const { apiCall } = await import('../api.js'); // Import dinámico para evitar ciclos
+
+        containers.forEach(async container => {
+            const url = container.dataset.url;
+            if (!url) return;
+
+            container.innerHTML = `
+                <div class="link-preview-loading">
+                    <i class="fas fa-spinner fa-spin"></i> Cargando vista previa...
+                </div>
+            `;
+
+            try {
+                const data = await apiCall('/api/utils/link-preview', {
+                    method: 'POST',
+                    body: { url }
+                });
+
+                if (data.error || (!data.title && !data.description)) {
+                    container.remove(); // No mostrar si falla o no hay datos
+                    return;
+                }
+
+                const domain = new URL(url).hostname;
+                const imageHTML = data.image ? `
+                    <div class="link-preview-image">
+                        <img src="${this.escapeHTML(data.image)}" alt="Preview">
+                    </div>
+                ` : '';
+
+                container.innerHTML = `
+                    <div class="link-preview-card">
+                        <a href="${this.escapeHTML(url)}" target="_blank" rel="noopener noreferrer">
+                            ${imageHTML}
+                            <div class="link-preview-info">
+                                <div class="link-preview-title">${this.escapeHTML(data.title || domain)}</div>
+                                <div class="link-preview-description">${this.escapeHTML(data.description || url)}</div>
+                                <div class="link-preview-domain">${domain}</div>
+                            </div>
+                        </a>
+                    </div>
+                `;
+            } catch (error) {
+                console.warn('Error cargando link preview:', error);
+                container.remove();
+            }
+        });
     }
 }

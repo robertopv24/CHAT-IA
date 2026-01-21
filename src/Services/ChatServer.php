@@ -172,25 +172,25 @@ class ChatServer implements MessageComponentInterface
         }
 
         // Eliminar la asociación de usuario si existe
-    if (isset($conn->userId)) {
-        $userId = $conn->userId;
-        if (isset($this->userConnections[$userId])) {
-            // Filtrar las conexiones para remover solo la actual
-            $this->userConnections[$userId] = array_filter(
-                $this->userConnections[$userId],
-                function($c) use ($conn) {
-                    return $c->resourceId !== $conn->resourceId;
+        if (isset($conn->userId)) {
+            $userId = $conn->userId;
+            if (isset($this->userConnections[$userId])) {
+                // Filtrar las conexiones para remover solo la actual
+                $this->userConnections[$userId] = array_filter(
+                    $this->userConnections[$userId],
+                    function ($c) use ($conn) {
+                        return $c->resourceId !== $conn->resourceId;
+                    }
+                );
+
+                // Si no quedan conexiones, limpiar la entrada
+                if (empty($this->userConnections[$userId])) {
+                    unset($this->userConnections[$userId]);
                 }
-            );
-            
-            // Si no quedan conexiones, limpiar la entrada
-            if (empty($this->userConnections[$userId])) {
-                unset($this->userConnections[$userId]);
             }
-        }
-        unset($this->connectionUsers[$conn->resourceId]);
-        error_log("👋 Conexión {$conn->resourceId} del usuario {$userId} cerrada");
-    } else {
+            unset($this->connectionUsers[$conn->resourceId]);
+            error_log("👋 Conexión {$conn->resourceId} del usuario {$userId} cerrada");
+        } else {
             error_log("👋 Conexión no autenticada {$conn->resourceId} desconectada.");
         }
 
@@ -270,7 +270,8 @@ class ChatServer implements MessageComponentInterface
             'sender_info' => [
                 'id' => $senderId,
                 'name' => $redisData['sender_name'] ?? 'Usuario',
-                'uuid' => $redisData['sender_uuid'] ?? null
+                'uuid' => $redisData['sender_uuid'] ?? null,
+                'avatar_url' => $redisData['sender_avatar_url'] ?? null
             ],
             'is_reply' => $isReply,
             'replying_to' => $isReply ? [
@@ -330,78 +331,81 @@ class ChatServer implements MessageComponentInterface
     /**
      * Validar estructura del mensaje Redis
      */
-     private function validateRedisMessage(array $message): bool
-         {
-             if (!is_array($message)) return false;
+    private function validateRedisMessage(array $message): bool
+    {
+        if (!is_array($message))
+            return false;
 
-             if (!isset($message['type'])) {
-                 error_log("❌ ChatServer Validation Fail: Campo 'type' ausente.");
-                 return false;
-             }
+        if (!isset($message['type'])) {
+            error_log("❌ ChatServer Validation Fail: Campo 'type' ausente.");
+            return false;
+        }
 
-             switch ($message['type']) {
-                 case 'new_message':
-                     $required = ['chat_uuid', 'message'];
-                     foreach ($required as $field) {
-                         if (!isset($message[$field])) {
-                              error_log("❌ ChatServer Validation Fail: Falta '$field' en new_message.");
-                             return false;
-                         }
-                     }
+        switch ($message['type']) {
+            case 'new_message':
+                $required = ['chat_uuid', 'message'];
+                foreach ($required as $field) {
+                    if (!isset($message[$field])) {
+                        error_log("❌ ChatServer Validation Fail: Falta '$field' en new_message.");
+                        return false;
+                    }
+                }
 
-                     if (!is_array($message['message'])) {
-                          error_log("❌ ChatServer Validation Fail: 'message' no es un array.");
-                         return false;
-                     }
+                if (!is_array($message['message'])) {
+                    error_log("❌ ChatServer Validation Fail: 'message' no es un array.");
+                    return false;
+                }
 
-                     // =====================================================
-                     // ✅ LA CORRECCIÓN CLAVE ESTÁ AQUÍ
-                     // =====================================================
-                     // Campos requeridos dentro del objeto 'message'
-                     $messageInternalRequired = ['uuid', 'content', 'user_id', 'created_at'];
+                // =====================================================
+                // ✅ LA CORRECCIÓN CLAVE ESTÁ AQUÍ
+                // =====================================================
+                // Campos requeridos dentro del objeto 'message'
+                $messageInternalRequired = ['uuid', 'content', 'user_id', 'created_at'];
 
-                     foreach ($messageInternalRequired as $field) {
-                         // Usamos array_key_exists() para permitir user_id = null (para la IA)
-                         if (!array_key_exists($field, $message['message'])) {
-                              error_log("❌ ChatServer Validation Fail: Falta '$field' en message.*");
-                              // Loguear el mensaje problemático para depuración
-                              error_log("Mensaje problemático: " . json_encode($message));
-                             return false;
-                         }
-                     }
-                     break;
+                foreach ($messageInternalRequired as $field) {
+                    // Usamos array_key_exists() para permitir user_id = null (para la IA)
+                    if (!array_key_exists($field, $message['message'])) {
+                        error_log("❌ ChatServer Validation Fail: Falta '$field' en message.*");
+                        // Loguear el mensaje problemático para depuración
+                        error_log("Mensaje problemático: " . json_encode($message));
+                        return false;
+                    }
+                }
 
-                 case 'new_notification':
-                     if (!isset($message['notification']) || !is_array($message['notification'])) {
-                         error_log("❌ ChatServer Validation Fail: 'notification' ausente o no es array.");
-                         return false;
-                     }
+                // NOTA: 'file_data' es opcional y no se valida aquí, pero se permite pasar
+                break;
 
-                     // Usamos array_key_exists() aquí también por consistencia
-                     if (!array_key_exists('user_id', $message['notification'])) {
-                         error_log("❌ ChatServer Validation Fail: Falta 'user_id' en notification.*");
-                         return false;
-                     }
-                     break;
+            case 'new_notification':
+                if (!isset($message['notification']) || !is_array($message['notification'])) {
+                    error_log("❌ ChatServer Validation Fail: 'notification' ausente o no es array.");
+                    return false;
+                }
 
-                 case 'new_chat':
-                     $required = ['chat_uuid', 'chat_type', 'participants'];
-                     foreach ($required as $field) {
-                         if (!isset($message[$field])) {
-                             error_log("❌ ChatServer Validation Fail: Falta '$field' en new_chat.");
-                             return false;
-                         }
-                     }
-                     break;
+                // Usamos array_key_exists() aquí también por consistencia
+                if (!array_key_exists('user_id', $message['notification'])) {
+                    error_log("❌ ChatServer Validation Fail: Falta 'user_id' en notification.*");
+                    return false;
+                }
+                break;
 
-                 default:
-                     error_log("❌ ChatServer Validation Fail: Tipo desconocido '{$message['type']}'.");
-                     return false;
-             }
+            case 'new_chat':
+                $required = ['chat_uuid', 'chat_type', 'participants'];
+                foreach ($required as $field) {
+                    if (!isset($message[$field])) {
+                        error_log("❌ ChatServer Validation Fail: Falta '$field' en new_chat.");
+                        return false;
+                    }
+                }
+                break;
 
-             // Si pasa todas las validaciones
-             return true;
-         }
+            default:
+                error_log("❌ ChatServer Validation Fail: Tipo desconocido '{$message['type']}'.");
+                return false;
+        }
+
+        // Si pasa todas las validaciones
+        return true;
+    }
 
     /**
      * Broadcast a todos los clientes suscritos al chat
@@ -449,13 +453,16 @@ class ChatServer implements MessageComponentInterface
 
         foreach ($this->userConnections as $userId => $connections) { // Iterar sobre el array de conexiones
             // No notificar al remitente
-            if ($userId == $senderId) continue;
+            if ($userId == $senderId)
+                continue;
 
             // Verificar si alguna de las conexiones del usuario está suscrita al chat
             $isSubscribed = false;
             foreach ($connections as $conn) {
-                if (isset($this->connectionChats[$conn->resourceId]) &&
-                    in_array($chatUuid, $this->connectionChats[$conn->resourceId])) {
+                if (
+                    isset($this->connectionChats[$conn->resourceId]) &&
+                    in_array($chatUuid, $this->connectionChats[$conn->resourceId])
+                ) {
                     $isSubscribed = true;
                     break;
                 }
@@ -637,7 +644,7 @@ class ChatServer implements MessageComponentInterface
         if (isset($this->chatConnections[$chatUuid])) {
             $this->chatConnections[$chatUuid] = array_filter(
                 $this->chatConnections[$chatUuid],
-                function($client) use ($conn) {
+                function ($client) use ($conn) {
                     return $client !== $conn;
                 }
             );
@@ -650,7 +657,7 @@ class ChatServer implements MessageComponentInterface
         if (isset($this->connectionChats[$conn->resourceId])) {
             $this->connectionChats[$conn->resourceId] = array_filter(
                 $this->connectionChats[$conn->resourceId],
-                function($chat) use ($chatUuid) {
+                function ($chat) use ($chatUuid) {
                     return $chat !== $chatUuid;
                 }
             );
@@ -682,7 +689,7 @@ class ChatServer implements MessageComponentInterface
         foreach ($participants as $userId) {
             // No enviar al creador si ya lo manejó el frontend?
             // En realidad es mejor enviarlo a todos para que el estado se sincronice en todas sus pestañas
-            $this->sendToUser((int)$userId, json_encode($payload));
+            $this->sendToUser((int) $userId, json_encode($payload));
         }
     }
 
@@ -713,7 +720,8 @@ class ChatServer implements MessageComponentInterface
     {
         try {
             $secretKey = ConfigService::get('JWT_SECRET_KEY') ?? '';
-            if (!$secretKey) return null;
+            if (!$secretKey)
+                return null;
 
             $decoded = JWT::decode($token, new Key($secretKey, 'HS256'));
             return $decoded->data->id ?? null;
@@ -838,7 +846,8 @@ class ChatServer implements MessageComponentInterface
      */
     private function ensureDbConnection(): ?\PDO
     {
-        if (!$this->dbFactory) return null;
+        if (!$this->dbFactory)
+            return null;
 
         try {
             // Intentar una consulta simple para ver si la conexión sigue viva
@@ -868,7 +877,7 @@ class ChatServer implements MessageComponentInterface
     private function isUserParticipant(int $userId, string $chatUuid): bool
     {
         $pdo = $this->ensureDbConnection();
-        
+
         if (!$pdo) {
             error_log("⚠️ ChatServer: No hay conexión a base de datos para validar membresía. Permitiendo por defecto (Riesgo).");
             return true;
@@ -883,11 +892,11 @@ class ChatServer implements MessageComponentInterface
             $stmt = $pdo->prepare($query);
             $stmt->execute(['user_id' => $userId, 'chat_uuid' => $chatUuid]);
 
-            return (bool)$stmt->fetch();
+            return (bool) $stmt->fetch();
 
         } catch (Exception $e) {
             error_log("❌ Error validando membresía en ChatServer: " . $e->getMessage());
-            
+
             // Si el error es específicamente de conexión perdida, intentamos reconectar una vez más
             if (strpos($e->getMessage(), 'gone away') !== false || strpos($e->getMessage(), 'Lost connection') !== false) {
                 error_log("🔄 Error de conexión detectado en consulta, reintentando...");
@@ -896,13 +905,13 @@ class ChatServer implements MessageComponentInterface
                     try {
                         $stmt = $pdo->prepare($query);
                         $stmt->execute(['user_id' => $userId, 'chat_uuid' => $chatUuid]);
-                        return (bool)$stmt->fetch();
+                        return (bool) $stmt->fetch();
                     } catch (Exception $retryError) {
                         error_log("❌ Fallo en reintento de consulta: " . $retryError->getMessage());
                     }
                 }
             }
-            
+
             // En caso de error de BD persistente, por seguridad denegamos el acceso
             return false;
         }

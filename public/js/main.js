@@ -5,6 +5,7 @@ import { setupEventListeners } from './eventListeners/index.js';
 import { setWelcomeMessageTime } from './utils.js';
 import { EmojiService } from './emojiService.js';
 import { fetchCsrfToken } from './api.js';
+import { ChatInfoManager } from './chat/chatInfoManager.js';
 
 // Importar elements directamente
 import { elements, initializeDynamicElements } from './elements.js';
@@ -127,6 +128,7 @@ class AppInitializer {
 
         // Inicializar servicios en orden
         this.emojiService = new EmojiService();
+        ChatInfoManager.init();
 
         // Verificar que los servicios se inicialicen correctamente
         const emojiStatus = this.emojiService.getStatus();

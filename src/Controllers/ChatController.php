@@ -26,12 +26,12 @@ class ChatController
         try {
             $this->redis = new RedisClient([
                 'scheme' => 'tcp',
-                'host'   => ConfigService::get('REDIS_HOST') ?? '127.0.0.1',
-                'port'   => ConfigService::get('REDIS_PORT') ?? 6379,
+                'host' => ConfigService::get('REDIS_HOST') ?? '127.0.0.1',
+                'port' => ConfigService::get('REDIS_PORT') ?? 6379,
                 'password' => ConfigService::get('REDIS_PASSWORD') ?? null,
                 'database' => ConfigService::get('REDIS_DB') ?? 0,
                 // Timeout corto para no bloquear la subida
-                'timeout' => 1.0, 
+                'timeout' => 1.0,
             ]);
         } catch (Exception $e) {
             error_log("⚠️ Error inicializando Redis: " . $e->getMessage());
@@ -62,26 +62,26 @@ class ChatController
         }
 
         $chatType = strip_tags($input['chat_type']);
-    $participantUuids = $input['participant_uuids'] ?? [];
-    $title = isset($input['title']) ? htmlspecialchars($input['title'], ENT_QUOTES, 'UTF-8') : null;
+        $participantUuids = $input['participant_uuids'] ?? [];
+        $title = isset($input['title']) ? htmlspecialchars($input['title'], ENT_QUOTES, 'UTF-8') : null;
 
-    if (!in_array($chatType, ['ai', 'user_to_user', 'group'])) {
-        http_response_code(400);
-        echo json_encode(['error' => 'chat_type debe ser "ai", "user_to_user" o "group"']);
-        return;
-    }
+        if (!in_array($chatType, ['ai', 'user_to_user', 'group'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'chat_type debe ser "ai", "user_to_user" o "group"']);
+            return;
+        }
 
-    if ($chatType === 'group' && empty($title)) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Los chats grupales requieren un título']);
-        return;
-    }
+        if ($chatType === 'group' && empty($title)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Los chats grupales requieren un título']);
+            return;
+        }
 
-    if (in_array($chatType, ['user_to_user', 'group']) && empty($participantUuids)) {
-        http_response_code(400);
-        echo json_encode(['error' => "Se requieren participant_uuids para chats $chatType"]);
-        return;
-    }
+        if (in_array($chatType, ['user_to_user', 'group']) && empty($participantUuids)) {
+            http_response_code(400);
+            echo json_encode(['error' => "Se requieren participant_uuids para chats $chatType"]);
+            return;
+        }
 
         try {
             $this->db->beginTransaction();
@@ -144,7 +144,7 @@ class ChatController
                     $pId = $this->getUserIdByUuid($pUuid);
                     if ($pId) {
                         $this->addParticipant($chatId, $pId);
-                        $participantIds[] = (int)$pId;
+                        $participantIds[] = (int) $pId;
                     }
                 }
             }
@@ -225,56 +225,56 @@ class ChatController
             $existingChat = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($existingChat) {
-            $this->db->commit();
-            
-            // NOTIFICACIÓN EN TIEMPO REAL (REDIS) - Por si acaso
-            $this->publishNewChatEvent($existingChat['uuid'], 'user_to_user', $existingChat['title'], [$currentUserId, $participantId]);
+                $this->db->commit();
 
-            http_response_code(200);
-            echo json_encode([
-                'message' => 'Chat existente encontrado',
-                'chat_uuid' => $existingChat['uuid'],
-                'chat_id' => $existingChat['id'],
-                'chat_title' => $existingChat['title'],
-                'created' => false
-            ]);
-            return;
-        }
+                // NOTIFICACIÓN EN TIEMPO REAL (REDIS) - Por si acaso
+                $this->publishNewChatEvent($existingChat['uuid'], 'user_to_user', $existingChat['title'], [$currentUserId, $participantId]);
 
-        // Crear nuevo chat si no existe
-        $stmt = $this->db->prepare("SELECT name FROM users WHERE id = :participant_id");
-        $stmt->execute([':participant_id' => $participantId]);
-        $participantUser = $stmt->fetch(PDO::FETCH_ASSOC);
+                http_response_code(200);
+                echo json_encode([
+                    'message' => 'Chat existente encontrado',
+                    'chat_uuid' => $existingChat['uuid'],
+                    'chat_id' => $existingChat['id'],
+                    'chat_title' => $existingChat['title'],
+                    'created' => false
+                ]);
+                return;
+            }
 
-        $chatTitle = "Chat con " . $participantUser['name'];
-        $chatUuid = $this->generateUuid();
+            // Crear nuevo chat si no existe
+            $stmt = $this->db->prepare("SELECT name FROM users WHERE id = :participant_id");
+            $stmt->execute([':participant_id' => $participantId]);
+            $participantUser = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $insertChatQuery = "INSERT INTO chats (uuid, chat_type, title, created_by, is_group) 
+            $chatTitle = "Chat con " . $participantUser['name'];
+            $chatUuid = $this->generateUuid();
+
+            $insertChatQuery = "INSERT INTO chats (uuid, chat_type, title, created_by, is_group) 
                         VALUES (:uuid, 'user_to_user', :title, :created_by, FALSE)";
-        $stmt = $this->db->prepare($insertChatQuery);
-        $stmt->execute([
-            ':uuid' => $chatUuid,
-            ':title' => $chatTitle,
-            ':created_by' => $currentUserId
-        ]);
-        $chatId = $this->db->lastInsertId();
+            $stmt = $this->db->prepare($insertChatQuery);
+            $stmt->execute([
+                ':uuid' => $chatUuid,
+                ':title' => $chatTitle,
+                ':created_by' => $currentUserId
+            ]);
+            $chatId = $this->db->lastInsertId();
 
-        $this->addParticipant($chatId, $currentUserId, true);
-        $this->addParticipant($chatId, $participantId, false);
+            $this->addParticipant($chatId, $currentUserId, true);
+            $this->addParticipant($chatId, $participantId, false);
 
-        $this->db->commit();
+            $this->db->commit();
 
-        // NOTIFICACIÓN EN TIEMPO REAL (REDIS)
-        $this->publishNewChatEvent($chatUuid, 'user_to_user', $chatTitle, [$currentUserId, $participantId]);
+            // NOTIFICACIÓN EN TIEMPO REAL (REDIS)
+            $this->publishNewChatEvent($chatUuid, 'user_to_user', $chatTitle, [$currentUserId, $participantId]);
 
-        http_response_code(201);
-        echo json_encode([
-            'message' => 'Chat creado exitosamente',
-            'chat_uuid' => $chatUuid,
-            'chat_id' => $chatId,
-            'chat_title' => $chatTitle,
-            'created' => true
-        ]);
+            http_response_code(201);
+            echo json_encode([
+                'message' => 'Chat creado exitosamente',
+                'chat_uuid' => $chatUuid,
+                'chat_id' => $chatId,
+                'chat_title' => $chatTitle,
+                'created' => true
+            ]);
 
         } catch (PDOException $e) {
             $this->db->rollBack();
@@ -435,7 +435,7 @@ class ChatController
     public function uploadFile()
     {
         error_log("🚀 [ChatController] Iniciando uploadFile");
-        
+
         header('Content-Type: application/json');
 
         if (!isset($GLOBALS['current_user'])) {
@@ -521,7 +521,8 @@ class ChatController
                 $stmt = $this->db->prepare("SELECT id, content, user_id FROM messages WHERE uuid = :replying_to_uuid");
                 $stmt->execute([':replying_to_uuid' => $replyingToUuid]);
                 $replyingToMessage = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($replyingToMessage) $replyingToId = $replyingToMessage['id'];
+                if ($replyingToMessage)
+                    $replyingToId = $replyingToMessage['id'];
             }
 
             $messageUuid = $this->generateUuid();
@@ -545,7 +546,7 @@ class ChatController
             $stmt->execute([':chat_id' => $chatId]);
 
             $messageQuery = "SELECT m.uuid, m.chat_id, m.user_id, m.content, m.message_type, m.ai_model, m.created_at,
-                                u.name as user_name, u.uuid as user_uuid, c.uuid as chat_uuid, c.title as chat_title, c.chat_type,
+                                u.name as user_name, u.uuid as user_uuid, u.avatar_url, c.uuid as chat_uuid, c.title as chat_title, c.chat_type,
                                 rm.uuid as replied_uuid, rm.content as replied_content, ru.name as replied_author_name
                             FROM messages m
                             JOIN users u ON m.user_id = u.id
@@ -572,15 +573,18 @@ class ChatController
                     'uuid' => $fullMessage['uuid'],
                     'user_id' => $fullMessage['user_id'],
                     'content' => $fileContent,
+                    'file_data' => $fileContent, // ✅ DUPLICADO PARA COMPATIBILIDAD CON RENDERER
                     'message_type' => $fullMessage['message_type'],
                     'ai_model' => $fullMessage['ai_model'],
                     'created_at' => $fullMessage['created_at'],
                     'user_name' => $fullMessage['user_name'],
-                    'user_uuid' => $fullMessage['user_uuid']
+                    'user_uuid' => $fullMessage['user_uuid'],
+                    'avatar_url' => $fullMessage['avatar_url']
                 ],
                 'sender_id' => $currentUserId,
                 'sender_name' => $GLOBALS['current_user']->name,
                 'sender_uuid' => $GLOBALS['current_user']->uuid,
+                'sender_avatar_url' => $fullMessage['avatar_url'],
                 'timestamp' => date('Y-m-d H:i:s'),
                 'is_reply' => !empty($replyingToId),
                 'replying_to_uuid' => $replyingToUuid,
@@ -622,7 +626,7 @@ class ChatController
             $this->db->rollBack();
             error_log("❌ [ChatController] Throwable/Exception: " . $e->getMessage());
             error_log("❌ [ChatController] Trace: " . $e->getTraceAsString());
-            http_response_code(500); 
+            http_response_code(500);
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
@@ -710,7 +714,8 @@ class ChatController
                 $stmt = $this->db->prepare("SELECT id, content, user_id FROM messages WHERE uuid = :replying_to_uuid");
                 $stmt->execute([':replying_to_uuid' => $replyingToUuid]);
                 $replyingToMessage = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($replyingToMessage) $replyingToId = $replyingToMessage['id'];
+                if ($replyingToMessage)
+                    $replyingToId = $replyingToMessage['id'];
             }
 
             // Insertar mensaje del usuario
@@ -736,7 +741,7 @@ class ChatController
 
             // Obtener el mensaje completo para Redis
             $messageQuery = "SELECT m.uuid, m.chat_id, m.user_id, m.content, m.message_type, m.ai_model, m.created_at,
-                                u.name as user_name, u.uuid as user_uuid, c.uuid as chat_uuid, c.title as chat_title, c.chat_type,
+                                u.name as user_name, u.uuid as user_uuid, u.avatar_url, c.uuid as chat_uuid, c.title as chat_title, c.chat_type,
                                 rm.uuid as replied_uuid, rm.content as replied_content, ru.name as replied_author_name
                             FROM messages m
                             JOIN users u ON m.user_id = u.id
@@ -764,11 +769,13 @@ class ChatController
                         'ai_model' => $fullMessage['ai_model'],
                         'created_at' => $fullMessage['created_at'],
                         'user_name' => $fullMessage['user_name'],
-                        'user_uuid' => $fullMessage['user_uuid']
+                        'user_uuid' => $fullMessage['user_uuid'],
+                        'avatar_url' => $fullMessage['avatar_url']
                     ],
                     'sender_id' => $currentUserId,
                     'sender_name' => $GLOBALS['current_user']->name,
                     'sender_uuid' => $GLOBALS['current_user']->uuid,
+                    'sender_avatar_url' => $fullMessage['avatar_url'],
                     'timestamp' => date('Y-m-d H:i:s'),
                     'is_reply' => !empty($replyingToId),
                     'replying_to_uuid' => $replyingToUuid,
@@ -1026,8 +1033,8 @@ class ChatController
             // Revertir para tener el orden cronológico correcto
             $messages = array_reverse($messages);
 
-            $processedMessages = array_map(function($message) {
-                if (in_array($message['message_type'], ['image', 'file']) && !empty($message['content'])) {
+            $processedMessages = array_map(function ($message) {
+                if (in_array($message['message_type'], ['image', 'file', 'audio', 'video']) && !empty($message['content'])) {
                     try {
                         $fileData = json_decode($message['content'], true);
                         if (json_last_error() === JSON_ERROR_NONE) {
@@ -1112,7 +1119,7 @@ class ChatController
             $stmt->execute([':chat_id' => $chatId, ':search_term' => $searchTerm, ':search_term_file' => $searchTermFile]);
             $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $processedMessages = array_map(function($message) {
+            $processedMessages = array_map(function ($message) {
                 if (in_array($message['message_type'], ['image', 'file']) && !empty($message['content'])) {
                     try {
                         $fileData = json_decode($message['content'], true);
@@ -1259,7 +1266,8 @@ class ChatController
     private function publishNewChatEvent($chatUuid, $chatType, $title, $participantIds)
     {
         try {
-            if (!$this->redis) return;
+            if (!$this->redis)
+                return;
 
             $event = [
                 'type' => 'new_chat',
@@ -1282,12 +1290,16 @@ class ChatController
 
     private function generateUuid(): string
     {
-        return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+        return sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
             mt_rand(0, 0xffff),
             mt_rand(0, 0x0fff) | 0x4000,
             mt_rand(0, 0x3fff) | 0x8000,
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff)
         );
     }
 
@@ -1297,7 +1309,7 @@ class ChatController
         $stmt = $this->db->prepare($query);
         $stmt->execute([':uuid' => $uuid]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ? (int)$result['id'] : null;
+        return $result ? (int) $result['id'] : null;
     }
 
     private function getChatIdByUuid(string $uuid): ?int
@@ -1306,7 +1318,7 @@ class ChatController
         $stmt = $this->db->prepare($query);
         $stmt->execute([':uuid' => $uuid]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ? (int)$result['id'] : null;
+        return $result ? (int) $result['id'] : null;
     }
 
     private function addParticipant(int $chatId, int $userId, bool $isAdmin = false): void
@@ -1326,7 +1338,8 @@ class ChatController
         $stmt->execute([':chat_id' => $chatId, ':sender_id' => $senderId]);
         $recipients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        if (empty($recipients)) return;
+        if (empty($recipients))
+            return;
 
         $chatQuery = "SELECT uuid FROM chats WHERE id = :chat_id";
         $stmt = $this->db->prepare($chatQuery);
@@ -1362,8 +1375,15 @@ class ChatController
                     ':chat_id' => $chatId
                 ]);
                 $notificationId = $this->db->lastInsertId();
-                $this->publishNotificationToRedis($recipient['user_id'], $notificationId, $notificationType,
-                                                $notificationTitle, $notificationContent, $chatUuid, $chatTitle);
+                $this->publishNotificationToRedis(
+                    $recipient['user_id'],
+                    $notificationId,
+                    $notificationType,
+                    $notificationTitle,
+                    $notificationContent,
+                    $chatUuid,
+                    $chatTitle
+                );
             } catch (Exception $e) {
                 error_log("❌ Error creando notificación: " . $e->getMessage());
             }
@@ -1373,9 +1393,12 @@ class ChatController
     private function getNotificationTitle(string $type, string $senderName, string $chatTitle): string
     {
         switch ($type) {
-            case 'reply': return "📨 {$senderName} respondió en {$chatTitle}";
-            case 'self_reply': return "↩️ {$senderName} respondió a su mensaje en {$chatTitle}";
-            default: return "💬 {$senderName} en {$chatTitle}";
+            case 'reply':
+                return "📨 {$senderName} respondió en {$chatTitle}";
+            case 'self_reply':
+                return "↩️ {$senderName} respondió a su mensaje en {$chatTitle}";
+            default:
+                return "💬 {$senderName} en {$chatTitle}";
         }
     }
 
@@ -1385,9 +1408,15 @@ class ChatController
             $this->redis->publish('canal-chat', json_encode([
                 'type' => 'new_notification',
                 'notification' => [
-                    'id' => $notificationId, 'user_id' => $userId, 'type' => $type, 'title' => $title,
-                    'content' => $content, 'chat_uuid' => $chatUuid, 'chat_title' => $chatTitle,
-                    'is_read' => false, 'created_at' => date('Y-m-d H:i:s')
+                    'id' => $notificationId,
+                    'user_id' => $userId,
+                    'type' => $type,
+                    'title' => $title,
+                    'content' => $content,
+                    'chat_uuid' => $chatUuid,
+                    'chat_title' => $chatTitle,
+                    'is_read' => false,
+                    'created_at' => date('Y-m-d H:i:s')
                 ],
                 'timestamp' => date('Y-m-d H:i:s')
             ]));
@@ -1396,13 +1425,165 @@ class ChatController
         }
     }
 
+    /**
+     * Obtiene los detalles de un chat (incluyendo todos los participantes)
+     */
+    public function getChatDetails()
+    {
+        header('Content-Type: application/json');
+        if (!isset($GLOBALS['current_user'])) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autenticado']);
+            return;
+        }
+
+        $chatUuid = $_GET['chat_uuid'] ?? null;
+        if (!$chatUuid) {
+            http_response_code(400);
+            echo json_encode(['error' => 'chat_uuid requerido']);
+            return;
+        }
+
+        try {
+            $chatId = $this->getChatIdByUuid($chatUuid);
+            if (!$chatId) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Chat no encontrado']);
+                return;
+            }
+
+            // Obtener info básica del chat
+            $queryChat = "SELECT id, uuid, title, chat_type, is_group, created_at FROM chats WHERE id = :id";
+            $stmtChat = $this->db->prepare($queryChat);
+            $stmtChat->execute([':id' => $chatId]);
+            $chat = $stmtChat->fetch(PDO::FETCH_ASSOC);
+
+            if (!$chat) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Chat no encontrado']);
+                return;
+            }
+
+            // Obtener participantes
+            $queryParticipants = "SELECT u.id, u.name, u.email, u.avatar_url, u.uuid, cp.is_admin 
+                                FROM users u 
+                                JOIN chat_participants cp ON u.id = cp.user_id 
+                                WHERE cp.chat_id = :id 
+                                ORDER BY u.name ASC";
+            $stmtParts = $this->db->prepare($queryParticipants);
+            $stmtParts->execute([':id' => $chatId]);
+            $participants = $stmtParts->fetchAll(PDO::FETCH_ASSOC);
+
+            // Determinar avatar y título si es chat directo
+            $currentUserId = $GLOBALS['current_user']->id;
+            if ($chat['chat_type'] === 'ai') {
+                $chat['avatar_url'] = '/public/assets/images/ai-avatar.png';
+            } elseif (!$chat['is_group'] && $chat['chat_type'] === 'user_to_user') {
+                foreach ($participants as $p) {
+                    if ($p['id'] != $currentUserId) {
+                        $chat['avatar_url'] = $p['avatar_url'];
+                        $chat['title'] = $p['name'];
+                        break;
+                    }
+                }
+            }
+
+            if (empty($chat['avatar_url'])) {
+                $chat['avatar_url'] = $chat['is_group'] ? '/public/assets/images/group-avatar.png' : '/public/assets/images/default-avatar.png';
+            }
+
+            echo json_encode([
+                'chat' => $chat,
+                'participants' => $participants
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Obtiene los archivos y medios de un chat filtrados por pestaña
+     */
+    public function getChatMedia()
+    {
+        header('Content-Type: application/json');
+        if (!isset($GLOBALS['current_user'])) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autenticado']);
+            return;
+        }
+
+        $chatUuid = $_GET['chat_uuid'] ?? null;
+        $tab = $_GET['tab'] ?? 'all'; // files, images, audios, links
+
+        if (!$chatUuid) {
+            http_response_code(400);
+            echo json_encode(['error' => 'chat_uuid requerido']);
+            return;
+        }
+
+        try {
+            $chatId = $this->getChatIdByUuid($chatUuid);
+            if (!$chatId) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Chat no encontrado']);
+                return;
+            }
+
+            $query = "SELECT m.uuid, m.content, m.message_type, m.created_at, u.name as user_name 
+                      FROM messages m 
+                      JOIN users u ON m.user_id = u.id 
+                      WHERE m.chat_id = :chat_id AND m.deleted = 0 ";
+
+            if ($tab === 'images') {
+                $query .= " AND m.message_type = 'image'";
+            } elseif ($tab === 'audios') {
+                $query .= " AND m.message_type = 'audio'";
+            } elseif ($tab === 'videos') {
+                $query .= " AND m.message_type = 'video'";
+            } elseif ($tab === 'files') {
+                $query .= " AND m.message_type = 'file'";
+            } elseif ($tab === 'links') {
+                $query .= " AND (m.message_type = 'text' AND (m.content LIKE '%http://%' OR m.content LIKE '%https://%'))";
+            } else {
+                // All non-text or messages with links
+                $query .= " AND (m.message_type != 'text' OR (m.content LIKE '%http://%' OR m.content LIKE '%https://%'))";
+            }
+
+            $query .= " ORDER BY m.created_at DESC";
+
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([':chat_id' => $chatId]);
+            $media = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            echo json_encode(['media' => $media]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
     private function determineMessageType(string $mimeType): string
     {
-        return strpos($mimeType, 'image/') === 0 ? 'image' : 'file';
+        if (strpos($mimeType, 'image/') === 0) {
+            return 'image';
+        } elseif (strpos($mimeType, 'audio/') === 0) {
+            return 'audio';
+        } elseif (strpos($mimeType, 'video/') === 0) {
+            return 'video';
+        }
+        return 'file';
     }
 
     private function getFileNotificationContent(string $messageType, string $fileName): string
     {
-        return ($messageType === 'image') ? "🖼️ Imagen: {$fileName}" : "📎 Archivo: {$fileName}";
+        if ($messageType === 'image')
+            return "🖼️ Imagen: {$fileName}";
+        if ($messageType === 'audio')
+            return "🎵 Audio: {$fileName}";
+        if ($messageType === 'video')
+            return "🎥 Video: {$fileName}";
+        return "📎 Archivo: {$fileName}";
     }
 }

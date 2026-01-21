@@ -92,7 +92,7 @@ set_error_handler(function ($errno, $errstr, $errfile, $errline) {
     if (!(error_reporting() & $errno)) {
         return false;
     }
-    
+
     // Ignorar errores menores en producción
     if (in_array($errno, [E_NOTICE, E_DEPRECATED, E_USER_DEPRECATED])) {
         return true;
@@ -120,7 +120,7 @@ set_error_handler(function ($errno, $errstr, $errfile, $errline) {
     exit();
 });
 
-set_exception_handler(function($exception) {
+set_exception_handler(function ($exception) {
     $msg = "💥 Excepción no capturada: " . $exception->getMessage() . " en " . $exception->getFile() . ":" . $exception->getLine() . "\nTrace: " . $exception->getTraceAsString();
     error_log($msg);
 
@@ -164,7 +164,8 @@ if (empty($route)) {
 error_log("🌐 [" . date('Y-m-d H:i:s') . "] Ruta: $route | Método: $method | IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
 
 // Rate Limiting básico
-function checkRateLimit() {
+function checkRateLimit()
+{
     if (session_status() !== PHP_SESSION_ACTIVE) {
         return;
     }
@@ -211,7 +212,8 @@ if ($route !== '/api/health') {
 }
 
 // Cargar manualmente las clases si el autoloader falla
-function loadControllerIfNeeded($controllerClass) {
+function loadControllerIfNeeded($controllerClass)
+{
     if (!class_exists($controllerClass)) {
         $controllerFile = __DIR__ . '/controllers/' . str_replace('Foxia\\Controllers\\', '', $controllerClass) . '.php';
         if (file_exists($controllerFile)) {
@@ -223,100 +225,116 @@ function loadControllerIfNeeded($controllerClass) {
 // Definir las rutas
 $routes = [
     'POST' => [
-        '/api/auth/register' => function() {
+        '/api/auth/register' => function () {
             loadControllerIfNeeded('Foxia\Controllers\AuthController');
             (new AuthController())->register();
         },
-        '/api/auth/login' => function() {
+        '/api/auth/login' => function () {
             loadControllerIfNeeded('Foxia\Controllers\AuthController');
             (new AuthController())->login();
         },
 
-        '/api/user/contacts/add' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/contacts/add' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->addContact();
         },
-        '/api/user/contacts/update-nickname' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/contacts/update-nickname' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->updateContactNickname();
         },
-        '/api/user/contacts/toggle-block' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/contacts/toggle-block' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->toggleBlockContact();
         },
-        '/api/user/contacts/delete' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/contacts/delete' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->deleteContact();
         },
-        '/api/chat/create' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/create' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->createChat();
         },
-        '/api/chat/find-or-create' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/find-or-create' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->findOrCreateChat();
         },
-        '/api/chat/rename' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/rename' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->renameChat();
         },
-        '/api/chat/delete' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/delete' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->deleteChat();
         },
-        '/api/chat/send-message' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/send-message' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->sendMessage();
         },
-        '/api/chat/upload-file' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/upload-file' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->uploadFile();
         },
-        '/api/chat/messages/delete' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/messages/delete' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->deleteMessage();
         },
-        '/api/user/avatar' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/avatar' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->updateAvatar();
         },
-        '/api/notifications/mark-read' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/notifications/mark-read' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\NotificationController');
             (new NotificationController())->markAsRead();
         },
-        '/api/notifications/mark-all-read' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/notifications/mark-all-read' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\NotificationController');
             (new NotificationController())->markAllAsRead();
         },
         // NUEVAS RUTAS DE ADMINISTRACIÓN
-        '/api/admin/update-setting' => function() {
-            if (!AdminMiddleware::handle()) return;
+        '/api/admin/update-setting' => function () {
+            if (!AdminMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\AdminController');
             (new AdminController())->updateSetting();
         },
-        '/api/ai/register-node' => function() {
+        '/api/ai/register-node' => function () {
             (new Foxia\Controllers\AIController())->registerNode();
         },
-        '/api/admin/manage-user' => function() {
-            if (!AdminMiddleware::handle()) return;
+        '/api/admin/manage-user' => function () {
+            if (!AdminMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\AdminController');
             (new AdminController())->manageUser();
         },
-        '/api/logs/error' => function() {
+        '/api/logs/error' => function () {
             // Ruta silenciosa para registrar errores del frontend
             $input = $GLOBALS['input_json'] ?? json_decode(file_get_contents('php://input'), true);
             error_log("💻 Frontend Error: " . json_encode($input));
@@ -325,11 +343,11 @@ $routes = [
         }
     ],
     'GET' => [
-        '/api/auth/csrf-token' => function() {
+        '/api/auth/csrf-token' => function () {
             header('Content-Type: application/json');
             echo json_encode(['csrf_token' => CsrfService::generateToken()]);
         },
-        '/api/auth/verify-email' => function() {
+        '/api/auth/verify-email' => function () {
             try {
                 loadControllerIfNeeded('Foxia\Controllers\AuthController');
 
@@ -351,8 +369,10 @@ $routes = [
                         $redirectUrl = $frontendBaseUrl . '?email_verified=1';
                     } else {
                         $errorMessage = 'Error en la verificación';
-                        if ($httpCode === 400) $errorMessage = 'Token inválido o expirado';
-                        if ($httpCode === 500) $errorMessage = 'Error del servidor';
+                        if ($httpCode === 400)
+                            $errorMessage = 'Token inválido o expirado';
+                        if ($httpCode === 500)
+                            $errorMessage = 'Error del servidor';
                         $redirectUrl = $frontendBaseUrl . '?verification_error=1&message=' . urlencode($errorMessage);
                     }
 
@@ -372,55 +392,82 @@ $routes = [
                 exit;
             }
         },
-        '/api/user/profile' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/profile' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->getProfile();
         },
-        '/api/user/contacts' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/contacts' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->getContacts();
         },
-        '/api/user/privacy-settings' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/privacy-settings' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->getPrivacySettings();
         },
-        '/api/notifications/list' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/notifications/list' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\NotificationController');
             (new NotificationController())->getUnread();
         },
-        '/api/notifications/unread' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/notifications/unread' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\NotificationController');
             (new NotificationController())->getUnread();
         },
-        '/api/notifications/history' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/notifications/history' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\NotificationController');
             (new NotificationController())->getHistory();
         },
-        '/api/chat/list' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/list' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->getChats();
         },
-        '/api/chat/messages' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/messages' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->getMessages();
         },
-        '/api/chat/search' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/chat/search' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\ChatController');
             (new ChatController())->searchMessages();
         },
-        '/api/ai/config' => function() {
+        '/api/chat/details' => function () {
+            if (!AuthMiddleware::handle())
+                return;
+            loadControllerIfNeeded('Foxia\Controllers\ChatController');
+            (new ChatController())->getChatDetails();
+        },
+        '/api/chat/media' => function () {
+            if (!AuthMiddleware::handle())
+                return;
+            loadControllerIfNeeded('Foxia\Controllers\ChatController');
+            (new ChatController())->getChatMedia();
+        },
+        '/api/utils/link-preview' => function () {
+            if (!AuthMiddleware::handle())
+                return;
+            loadControllerIfNeeded('Foxia\Controllers\UtilsController');
+            (new Foxia\Controllers\UtilsController())->getLinkPreview();
+        },
+        '/api/ai/config' => function () {
             (new Foxia\Controllers\AIController())->getConfig();
         },
-        '/api/health' => function() {
+        '/api/health' => function () {
             $status = 'ok';
             $services = [];
 
@@ -437,7 +484,7 @@ $routes = [
             try {
                 $redisHost = ConfigService::get('REDIS_HOST') ?? '127.0.0.1';
                 $redisPort = ConfigService::get('REDIS_PORT') ?? 6379;
-                
+
                 $redis = new Predis\Client([
                     'host' => $redisHost,
                     'port' => $redisPort,
@@ -469,8 +516,9 @@ $routes = [
                 'upload_stats' => $uploadStats ?? null
             ]);
         },
-        '/api/system/info' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/system/info' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             http_response_code(200);
             echo json_encode([
                 'php_version' => PHP_VERSION,
@@ -481,8 +529,9 @@ $routes = [
                 'uptime' => exec('uptime -p') ?: 'Unknown'
             ]);
         },
-        '/api/system/storage-stats' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/system/storage-stats' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             try {
                 $storageStats = \Foxia\Services\FileUploadService::getStorageStats();
                 http_response_code(200);
@@ -496,28 +545,32 @@ $routes = [
             }
         },
         // RUTAS DE ADMINISTRACIÓN
-        '/api/admin/settings' => function() {
-            if (!AdminMiddleware::handle()) return;
+        '/api/admin/settings' => function () {
+            if (!AdminMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\AdminController');
             (new AdminController())->getSettings();
         },
-        '/api/admin/stats' => function() {
-            if (!AdminMiddleware::handle()) return;
+        '/api/admin/stats' => function () {
+            if (!AdminMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\AdminController');
             (new AdminController())->getSystemStats();
         },
-        '/api/admin/users' => function() {
-            if (!AdminMiddleware::handle()) return;
+        '/api/admin/users' => function () {
+            if (!AdminMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\AdminController');
             (new AdminController())->getUsers();
         },
-        '/api/admin/logs' => function() {
-            if (!AdminMiddleware::handle()) return;
+        '/api/admin/logs' => function () {
+            if (!AdminMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\AdminController');
             (new AdminController())->getSystemLogs();
         },
         // Ruta para servir el panel de administración HTML
-        '/admin' => function() {
+        '/admin' => function () {
             $adminHtmlPath = __DIR__ . '/../admin/index.html';
             if (file_exists($adminHtmlPath)) {
                 header('Content-Type: text/html');
@@ -527,7 +580,7 @@ $routes = [
                 echo json_encode(['error' => 'Panel de administración no encontrado']);
             }
         },
-        '/admin/' => function() {
+        '/admin/' => function () {
             $adminHtmlPath = __DIR__ . '/../admin/index.html';
             if (file_exists($adminHtmlPath)) {
                 header('Content-Type: text/html');
@@ -539,25 +592,29 @@ $routes = [
         }
     ],
     'PUT' => [
-        '/api/user/profile' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/profile' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->updateProfile();
         },
-        '/api/user/password' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/password' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->changePassword();
         },
-        '/api/user/privacy' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/privacy' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->updatePrivacySettings();
         }
     ],
     'DELETE' => [
-        '/api/user/account' => function() {
-            if (!AuthMiddleware::handle()) return;
+        '/api/user/account' => function () {
+            if (!AuthMiddleware::handle())
+                return;
             loadControllerIfNeeded('Foxia\Controllers\UserController');
             (new UserController())->deactivateAccount();
         }
@@ -580,9 +637,9 @@ if (isset($routes[$method][$route])) {
         if (preg_match($pattern, $route, $matches)) {
             $matchedRoute = $routePattern;
             preg_match_all('/\{[^}]+\}/', $routePattern, $paramNames);
-            $paramNames = array_map(function($name) {
+            $paramNames = array_map(function ($name) {
                 return trim($name, '{}');
-            }, $paramNames[0]);
+            }, is_array($paramNames[0]) ? $paramNames[0] : []);
 
             $routeParams = array_combine($paramNames, array_slice($matches, 1));
             break;

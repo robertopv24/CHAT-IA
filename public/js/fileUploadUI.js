@@ -247,10 +247,12 @@ class FileUploadManager {
             'application/pdf', 'text/plain',
             'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/zip', 'audio/mpeg', 'audio/wav', 'video/mp4', 'video/mpeg'
+            'application/zip', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/aac', 'audio/x-m4a',
+            'video/mp4', 'video/mpeg', 'video/webm',
+            'application/epub+zip'
         ];
 
-        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.txt', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.mp3', '.wav', '.mp4', '.mpeg'];
+        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.txt', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.mp3', '.wav', '.ogg', '.m4a', '.aac', '.mp4', '.mpeg', '.webm', '.epub'];
 
         // Verificar por tipo MIME
         if (fileType && allowedTypes.includes(fileType)) {
